@@ -91,7 +91,7 @@ class ACME():
         table = pd.DataFrame()
 
         for feature in self._feature_importance.index:
-            # for every feature, we compute the predictions based on the feature quantiles
+            #for every feature, we compute the predictions based on the feature quantiles
             #create the variable-quantile matrix
             Z = create_quantile_feature_matrix(dataframe, feature, self._target, self._K, local = local)
             
@@ -129,7 +129,6 @@ class ACME():
     
     def summary_plot(self, local = False):
         
-        from data_science.modules import discretization
         from data_science.output import Output
         
         if local:
