@@ -84,11 +84,11 @@ class ACME():
             if len(label_list) > 1:
                 class_stack_importance['Importance'] = class_stack_importance.sum(axis=1).values
 
-            class_stack_importance.sort_values('Importance', ascending = False, inplace=True)
+            #class_stack_importance.sort_values('Importance', ascending = False, inplace=True)
             out = class_stack_importance
 
         self._meta = out_table
-        self._feature_importance = out
+        self._feature_importance = out.sort_values('Importance', ascending = False)
 
         return self
 
@@ -131,8 +131,6 @@ class ACME():
                 qualitative_features = self._qualitative_features, quantitative_features = self._quantitative_features, qualitative_df = self._qualitative_df, quantitative_df = self._quantitative_df,
                 importance_table = self._feature_importance.sort_values('Importance', ascending = False), target_feature = self._target,
                 task = self._task, local = local, K = self._K, class_to_analyze = class_to_analyze, local_table = local_table )
-
-        out.sort_values( 'Importance', ascending = False, inplace = True )
             
         self._local_meta = local_table
         
