@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from utils import create_quantile_feature_matrix, create_level_variable_matrix, most_frequent, clean_list
+from utils import create_quantile_feature_matrix, create_level_variable_matrix, most_frequent, clean_list, calculate_quantile_position, nearest_quantile
 
 def _computeACME(model, dataframe, features, quantitative_df, qualitative_df, importance_table, qualitative_features, quantitative_features, target_feature, task, local, K, class_to_analyze = None,table = None, local_table = None ):
     # for every feature, we compute the predictions based on the feature quantiles
@@ -104,12 +104,22 @@ def _computeACME(model, dataframe, features, quantitative_df, qualitative_df, im
 
             #build the dataframe with the standardize_effect, the predictions and the original 
 
+            local_quantile =  calculate_quantile_position(dataframe, feature, local)
+
             local_df['effect'] = predictions
             local_df['predictions'] = predictions
             local_df['mean_prediction'] = local_pred
             local_df['original'] = Z[feature].values
             local_df['quantile'] = Z['quantile'].values
             local_df['Importance'] = importance_table.loc[feature,'Importance']
+            
+            near_quantile = nearest_quantile(local_df, local_quantile)
+
+            local_df['size'] = 0.2
+            local_df.loc[local_df['quantile'] == near_quantile,'size'] = 1.5
+
+            local_df['local_quantile'] = near_quantile
+            #local_df['local_pred'] = local_df.loc[local_df['quantile']==near_quantile,'predictions'].unique()[0]
             local_df.index = np.repeat(feature, len(predictions))
             local_table = pd.concat([local_table, local_df])
 

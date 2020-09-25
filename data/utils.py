@@ -49,19 +49,38 @@ def create_level_variable_matrix(dataframe, feature, local=None):
     
     return Z
 
+def calculate_quantile_position(dataframe,column,local):
+
+    from statsmodels.distributions.empirical_distribution import ECDF
+
+    ecdf = ECDF(dataframe[column])
+    return ecdf(dataframe.loc[local,column])    
+
+def nearest_quantile(dataframe, local_quantile):
+
+    q_list = dataframe['quantile'].unique()
+    return q_list[np.argmin(np.abs(q_list - local_quantile))]
+
 def plot_express(plot_df, meta):
     from data_science.plot.plotly_base import PlotlyBase
     import plotly.express as px
     
     x = meta['x']
+    
+    if meta['local']:
+        label_x = 'prediction'
+        color_scale = ['royalblue','red']
+        title = 'Local AcME: observations ' + str(meta['index']) + '. Predicted: ' + str(round(x,3))
+        fig = px.scatter(plot_df, x="effect", y='feature', color="quantile", size = 'size', color_continuous_scale = color_scale,labels = {'effect':label_x,'feature':'Feature'}, title = title)
+    else:
+        label_x = 'standardize effect'
+        color_scale = ['royalblue','red']
+        title = 'Global AcME '
+        fig = px.scatter(plot_df, x="effect", y='feature', color="quantile", color_continuous_scale = color_scale,labels = {'effect':label_x,'feature':'Feature'}, title = title)
+
     y_bottom = meta['y_bottom']
     y_top = meta['y_top']
-
-    fig = px.scatter(plot_df, x="effect", y='feature', color="quantile", color_continuous_scale = ['royalblue','red'])
-    fig.update_layout(shapes=[dict( type="line", x0=x, y0=y_bottom, x1=x, y1=y_top, line = dict(color="black", width=2 ,dash="dash" ) )] )
     
-    #title = ' ACME'
-
-    #fig.update_layout(title_text = title )
+    fig.update_layout(shapes=[dict( type="line", x0=x, y0=y_bottom, x1=x, y1=y_top, line = dict(color="black", width=2 ,dash="dash" ) )] )
     
     return fig

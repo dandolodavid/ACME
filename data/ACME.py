@@ -95,7 +95,10 @@ class ACME():
     def fit_local(self,dataframe,local,label_class = None):
 
         local_table = pd.DataFrame()
+        class_to_analyze = None
 
+        self._local = local
+        
         if self._task  == 'c' or self._task =='class' or self._task =='classification':
             class_map = np.array(self._model.classes_)
             if label_class is not None:
@@ -108,8 +111,8 @@ class ACME():
                 label_class = class_map[class_to_analyze]
                 print( 'WARNING: in local interpretation, the label_class must be specified and not None. To default it\'s setted to class:' + str(class_map[0]) )
             
-            self._class_to_analyze = class_to_analyze
-            self._label_class = label_class
+        self._class_to_analyze = class_to_analyze
+        self._label_class = label_class
 
         #if the fitting procedure is not done, we frist compute the overall importance and create the quantitative and qualitative dataframe
         if self._meta is None:
@@ -133,7 +136,7 @@ class ACME():
                 task = self._task, local = local, K = self._K, class_to_analyze = class_to_analyze, local_table = local_table )
             
         self._local_meta = local_table
-        
+
         return self   
     
     def summary_plot(self, local = False):
@@ -152,11 +155,16 @@ class ACME():
                 fig = px.bar(plot_df.iloc[::-1].reset_index().rename(columns={'index':'Feature'}), x='Importance',y="Feature", color='class', orientation='h', title='Overall Classification Importance')
                 return fig
 
-    
+
+        meta = dict()
+
         if local:
             table = self._local_meta
+            meta['local'] = True
+            meta['index'] = self._local 
         else:
             table = self._meta
+            meta['local'] = False
 
         plot_df = pd.DataFrame()
         out = self._feature_importance.sort_values('Importance')
@@ -168,11 +176,11 @@ class ACME():
         plot_df.reset_index(inplace=True)
         plot_df.rename(columns={'index':'feature'}, inplace=True)
         
-        meta = dict()
         if local:
             meta['x'] = table['mean_prediction'].values[0]
         else: 
             meta['x'] = 0
+
         meta['y_bottom'] = plot_df['feature'].values[0]
         meta['y_top'] = plot_df['feature'].values[len(plot_df)-1]
 
@@ -180,8 +188,7 @@ class ACME():
 
     def bar_plot(self):
         import plotly.express as px
-
-        fig = px.bar(self._feature_importance.reset_index().sort_values('Importance').rename(columns={'index':'Feature'}), x='Importance',y="Feature", orientation='h')
+        fig = px.bar(self._feature_importance.reset_index().sort_values('Importance').rename(columns={'index':'Feature'}), x='Importance',y="Feature", orientation='h', title = 'Barplot of feature importance')
         fig.show()
 
     def feature_importance(self):
@@ -191,5 +198,5 @@ class ACME():
         return self._meta
 
     def local_table(self):
-        return self._local_meta
+        return self._local_meta.drop(columns='size')
 
