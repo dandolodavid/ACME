@@ -2,48 +2,85 @@ import pandas as pd
 import numpy as np
 from utils import create_quantile_feature_matrix, create_level_variable_matrix, most_frequent, clean_list, calculate_quantile_position, nearest_quantile
 
-def _computeACME(model, dataframe, features, quantitative_df, qualitative_df, importance_table, qualitative_features, quantitative_features, target_feature, task, local, K, class_to_analyze = None,table = None, local_table = None ):
+def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_table, label, task, local, K, robust = False, class_to_analyze = None, table = None, local_table = None ):
+    
+    '''
+    Params:
+    ------
+    - model: object
+        the object of the model
+    - dataframe: pd.DataFrame
+        the dataframe used to train the model or to predict
+    - features: [str] 
+        list of the features name in SAME ORDER as the the model input
+    - numeric_df: pd.DataFrame
+        splitted dataframe with only numerical (quantitative) features
+    - cat_df: pd.DataFrame
+        splitted dataframe with only numerical (quantitative) features
+    - importance_table: pd.DataFrame
+        dataframe with as index the name of the feature
+    - label: str
+        name of the target_feature
+    '''    
+
     # for every feature, we compute the predictions based on the feature quantiles
     # create the variable-quantile matrix
+    if type(numeric_df) != type(None): #chek if the dataframe is empty
+        numeric_features = numeric_df.columns.to_list()
+    else:
+        numeric_features = []
+    if type(cat_df) != type(None): #chek if the dataframe is empty
+        cat_features = cat_df.columns.to_list()
+    else:
+        cat_features = []
 
     for feature in importance_table.index:
         df = pd.DataFrame()
         local_df = pd.DataFrame()
-
+    
         if local is None:
             #for every quantitative feature, we compute the predictions based on the feature quantiles and create the variable-quantile matrix
             #for every quantitative feature, we compute the predictions based on the feature levels and create the variable-levels matrix         
-            if feature in qualitative_features:
-                
-                Z_quantitative = pd.DataFrame( quantitative_df.mean() ).T
-                if qualitative_features != []:
-                    Z_qualitative = create_level_variable_matrix( qualitative_df, feature,local = None) 
+            if feature in cat_features:
+                Z_quantitative = pd.DataFrame( numeric_df.mean() ).T
+                if cat_features != []:
+                    Z_qualitative = create_level_variable_matrix( cat_df, feature,local = None) 
                     Z = pd.concat( [ Z_quantitative.loc[Z_quantitative.index.repeat(len(Z_qualitative))].reset_index(drop=True) , Z_qualitative.reset_index(drop=True) ] , axis = 1 )
                 else:
                     Z = Z_quantitative
             else:
 
-                Z_quantitative = create_quantile_feature_matrix( quantitative_df, feature, K, local = None )
-                if qualitative_features != []:
-                    Z_qualitative = pd.DataFrame( qualitative_df.apply(lambda x: most_frequent(x), axis=0) ).T
+                Z_quantitative = create_quantile_feature_matrix( numeric_df, feature, K, local = None, robust = robust )
+                if cat_features != []:
+                    Z_qualitative = pd.DataFrame( cat_df.apply(lambda x: most_frequent(x), axis=0) ).T
                     Z = pd.concat( [ Z_qualitative.loc[Z_qualitative.index.repeat(len(Z_quantitative))].reset_index(drop=True), Z_quantitative.reset_index(drop=True) ] , axis = 1  )
                 else:
                     Z = Z_quantitative
 
 
-            x_mean = pd.DataFrame( quantitative_df.mean() ).T
-            if qualitative_features != []:
-                x_most_freq = pd.DataFrame( qualitative_df.apply( lambda x : most_frequent(x) )).T
+            x_mean = pd.DataFrame( numeric_df.mean() ).T
+            if cat_features != []:
+                x_most_freq = pd.DataFrame( cat_df.apply( lambda x : most_frequent(x) )).T
                 x_mean = pd.concat( [x_mean,x_most_freq], axis = 1 )
                 
             if task  == 'r' or task =='reg' or task =='regression':
                 
                 #mean prediction
                 mean_pred = model.predict(x_mean[features])[0]
+                try:
+                    if len(mean_pred) == 2:
+                        mean_pred = mean_pred[0]
+                except:
+                    pass
                 
                 #prediciton
                 predictions = model.predict(Z.drop(columns='quantile')[features])
-
+                try:
+                    if predictions.shape[1] == 2:
+                        predictions = predictions[:,0]
+                except:
+                    pass
+                
             elif task  == 'c' or task =='class' or task =='classification':
 
                 #mean prediction
@@ -63,23 +100,29 @@ def _computeACME(model, dataframe, features, quantitative_df, qualitative_df, im
             df['quantile'] = Z['quantile'].values            
             importance_table.loc[feature,'Importance'] = np.mean( np.abs(df['effect'].values) )
             df['Importance'] = importance_table.loc[feature,'Importance']
+            if task  == 'c' or task =='class' or task =='classification':
+                df['class'] = class_to_analyze
+            if feature in cat_features:
+                df['type_feature'] = 'categorical'
+            else:
+                df['type_feature'] = 'numeric'
             df.index = np.repeat(feature, len(predictions))
 
             table = pd.concat([table, df])
 
-        else:
-
-            if feature in qualitative_features:
-                Z_quantitative = pd.DataFrame(quantitative_df.loc[local]).T
-                if qualitative_features != []:
-                    Z_qualitative = create_level_variable_matrix(qualitative_df, feature,local = local)
+        else: #if local
+            #the procedure is the same but we must change the baseline and the scale of the effect (now the original prediction scale)
+            if feature in cat_features:
+                Z_quantitative = pd.DataFrame(numeric_df.loc[local]).T
+                if cat_features != []:
+                    Z_qualitative = create_level_variable_matrix(cat_df, feature,local = local)
                     Z = pd.concat( [ Z_quantitative.loc[Z_quantitative.index.repeat(len(Z_qualitative))].reset_index(drop=True) , Z_qualitative.reset_index(drop=True) ] , axis = 1 )
                 else:
                     Z = Z_quantitative
             else:
-                Z_quantitative = create_quantile_feature_matrix( quantitative_df, feature, K, local = local )
-                if qualitative_features != []:
-                    Z_qualitative = pd.DataFrame( qualitative_df.apply(lambda x: most_frequent(x), axis=0) ).T
+                Z_quantitative = create_quantile_feature_matrix( numeric_df, feature, K, local = local, robust = robust )
+                if cat_features != []:
+                    Z_qualitative = pd.DataFrame( cat_df.apply(lambda x: most_frequent(x), axis=0) ).T
                     Z = pd.concat( [ Z_qualitative.loc[Z_qualitative.index.repeat(len(Z_quantitative))].reset_index(drop=True), Z_quantitative.reset_index(drop=True) ] , axis = 1  )
                 else:
                     Z = Z_quantitative
@@ -87,7 +130,7 @@ def _computeACME(model, dataframe, features, quantitative_df, qualitative_df, im
             if task == 'r' or task=='reg' or task=='regression':
 
                 #mean prediction
-                x_local = pd.DataFrame(dataframe.drop(columns = [target_feature]).loc[local]).T
+                x_local = pd.DataFrame(dataframe.drop(columns = [label]).loc[local]).T
                 local_pred = model.predict(x_local[features])[0]
                 #prediciton
                 predictions = model.predict(Z.drop(columns='quantile')[features])
@@ -95,14 +138,14 @@ def _computeACME(model, dataframe, features, quantitative_df, qualitative_df, im
             elif task == 'c' or task=='class' or task=='classification':
 
                 #mean prediction
-                local_pred = model.predict_proba( dataframe.drop(columns = target_feature).loc[[local]] )[:,class_to_analyze][0] 
+                local_pred = model.predict_proba( dataframe.drop(columns = label).loc[[local]] )[:,class_to_analyze][0] 
                 #prediciton
                 try:
                     predictions = model.predict_proba(Z.drop(columns='quantile')[features])[:,class_to_analyze]
                 except:
                     predictions = model.predict_proba(Z.drop(columns='quantile')[features])[class_to_analyze]
 
-            #build the dataframe with the standardize_effect, the predictions and the original 
+             #build the dataframe with the standardize_effect, the predictions and the original 
 
             local_quantile =  calculate_quantile_position(dataframe, feature, local)
 
@@ -119,12 +162,11 @@ def _computeACME(model, dataframe, features, quantitative_df, qualitative_df, im
             local_df.loc[local_df['quantile'] == near_quantile,'size'] = 1.5
 
             local_df['local_quantile'] = near_quantile
-            #local_df['local_pred'] = local_df.loc[local_df['quantile']==near_quantile,'predictions'].unique()[0]
             local_df.index = np.repeat(feature, len(predictions))
             local_table = pd.concat([local_table, local_df])
-
         
     if local is None:            
         return table, importance_table
     else:
         return local_table, importance_table
+   

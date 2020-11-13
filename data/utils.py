@@ -13,14 +13,21 @@ def clean_list(List,to_keep):
             out.remove(i)
     return out
 
-def create_quantile_feature_matrix(dataframe, feature, K, local = None):
+def create_quantile_feature_matrix(dataframe, feature, K, robust = False, local = None):
     '''
     Create a matrix with K row, made by all the columns dataframe mean values, except for the "feature", which is replaced by K quantiles of the feature empiracal distribution
     '''
+    if robust:
+        min_q = 0.05
+        max_q = 0.95
+    else:
+        min_q = 0
+        max_q = 1
+    
     if K > 2:
-        quantile = np.linspace(0,1,K)
+        quantile = np.linspace(min_q,max_q,K)
     if K == 2:
-        quantile = [ 0.01, 0.99 ]
+        quantile = [ min_q, max_q ]
     x_j = dataframe[feature].values
     x_j_k = np.quantile(x_j,quantile)
     if local is None:
@@ -70,10 +77,10 @@ def plot_express(plot_df, meta):
     if meta['local']:
         label_x = 'prediction'
         color_scale = ['royalblue','red']
-        title = 'Local AcME: observations ' + str(meta['index']) + '. Predicted: ' + str(round(x,3))
+        title = 'Local AcME: observation ID ' + str(meta['index']) + '. Predicted: ' + str(round(x,3))
         fig = px.scatter(plot_df, x="effect", y='feature', color="quantile", size = 'size', color_continuous_scale = color_scale,labels = {'effect':label_x,'feature':'Feature'}, title = title)
     else:
-        label_x = 'standardize effect'
+        label_x = 'standardized effect'
         color_scale = ['royalblue','red']
         title = 'Global AcME '
         fig = px.scatter(plot_df, x="effect", y='feature', color="quantile", color_continuous_scale = color_scale,labels = {'effect':label_x,'feature':'Feature'}, title = title)
@@ -82,5 +89,6 @@ def plot_express(plot_df, meta):
     y_top = meta['y_top']
     
     fig.update_layout(shapes=[dict( type="line", x0=x, y0=y_bottom, x1=x, y1=y_top, line = dict(color="black", width=2 ,dash="dash" ) )] )
+    fig.update_layout( title={ 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top'})
     
     return fig

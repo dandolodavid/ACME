@@ -15,7 +15,7 @@ class ACME():
         self._meta = None
         self._K = K
 
-    def fit(self, dataframe, label_class = None ):    
+    def fit(self, dataframe, robust = True, label_class = None ):    
     
         #if qualitative features and quantitative features are not specified then all the columns of the dataset (not the target) are used as quantitative feature
         if self._quantitative_features == [] and self._qualitative_features == []:
@@ -58,9 +58,9 @@ class ACME():
         out_table = pd.DataFrame()
 
         if self._task  == 'r' or self._task =='reg' or self._task =='regression':
-            out_table, out = _computeACME( model = self._model, dataframe = dataframe, features = self._features, 
-            qualitative_features = self._qualitative_features, quantitative_features = self._quantitative_features, 
-            qualitative_df = self._qualitative_df, quantitative_df = self._quantitative_df, importance_table = out, target_feature = self._target, task = self._task, local = None, K=self._K, table=out_table )
+            out_table, out = _computeACME( model = self._model, dataframe = dataframe, features = self._features,  
+            numeric_df = self._quantitative_df, cat_df = self._qualitative_df, importance_table = out, 
+            label = self._target, task = self._task, local = None, K=self._K, robust=robust, table=out_table )
         
         if self._task  == 'c' or self._task =='class' or self._task =='classification':
             class_stack_importance = None
@@ -71,8 +71,8 @@ class ACME():
             
             for i in label_list:
                 out_table, out = _computeACME( model = self._model, dataframe = dataframe, features = self._features, 
-                qualitative_features = self._qualitative_features, quantitative_features = self._quantitative_features, 
-                qualitative_df = self._qualitative_df, quantitative_df = self._quantitative_df, importance_table = out, target_feature = self._target, task = self._task,local = None, K=self._K, class_to_analyze = i, table = out_table )
+                numeric_df = self._quantitative_df, cat_df = self._qualitative_df, importance_table = out, 
+                label = self._target, task = self._task,local = None, K=self._K, class_to_analyze = i, table = out_table )
                 
                 if len(label_list) > 1:
                     out.rename( columns = { 'Importance' : 'Importance_class_' + str(i) }, inplace=True )
@@ -92,7 +92,7 @@ class ACME():
 
         return self
 
-    def fit_local(self,dataframe,local,label_class = None):
+    def fit_local(self, dataframe,local, robust = True, label_class = None):
 
         local_table = pd.DataFrame()
         class_to_analyze = None
@@ -125,14 +125,14 @@ class ACME():
                 
         if self._task  == 'r' or self._task =='reg' or self._task =='regression': 
             local_table, out = _computeACME( model = self._model, dataframe = dataframe, features = self._features, 
-                qualitative_features = self._qualitative_features, quantitative_features = self._quantitative_features, qualitative_df = self._qualitative_df, quantitative_df = self._quantitative_df,
-                importance_table = self._feature_importance.sort_values('Importance', ascending = False), target_feature = self._target,
+                numeric_df = self._quantitative_df, cat_df = self._qualitative_df, 
+                importance_table = self._feature_importance.sort_values('Importance', ascending = False), label = self._target,
                 task = self._task, local = local, K = self._K, local_table = local_table )
         
         if self._task  == 'c' or self._task =='class' or self._task =='classification':
             local_table, out =_computeACME( model = self._model, dataframe=dataframe, features = self._features, 
-                qualitative_features = self._qualitative_features, quantitative_features = self._quantitative_features, qualitative_df = self._qualitative_df, quantitative_df = self._quantitative_df,
-                importance_table = self._feature_importance.sort_values('Importance', ascending = False), target_feature = self._target,
+                numeric_df = self._quantitative_df, cat_df = self._qualitative_df,
+                importance_table = self._feature_importance.sort_values('Importance', ascending = False), label = self._target,
                 task = self._task, local = local, K = self._K, class_to_analyze = class_to_analyze, local_table = local_table )
             
         self._local_meta = local_table
@@ -175,7 +175,7 @@ class ACME():
         plot_df.drop_duplicates(subset = ['effect','predictions','quantile'], keep ='first')
         plot_df.reset_index(inplace=True)
         plot_df.rename(columns={'index':'feature'}, inplace=True)
-        
+
         if local:
             meta['x'] = table['mean_prediction'].values[0]
         else: 
