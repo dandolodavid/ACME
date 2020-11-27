@@ -19,13 +19,13 @@ acme_reg = acme_reg.fit(dataset)
 acme_reg.summary_plot()
 ```
 
-![ACME summary plot](image/acme_overall.png)
+![ACME summary plot](image/reg_acme.pdf)
 
 ``` python
 acme_reg.bar_plot()
 ```
 
-![ACME bar plot](image/boston_comparison/barplot/ashap_rf.png)
+![ACME bar plot](image/boston_comparison/barplot/acme_bar_rf.pdf)
 
 ``` python
 acme_reg.feature_importance()
@@ -38,7 +38,7 @@ acme_local = acme_reg.fit_local(dataset, local=100)
 acme_local.summary_plot(local=True)
 ```
 
-![ACME local plot](image/acme_local.png)
+![ACME local plot](image/reg_local_acme.pdf)
 
 ### CLASSIFICATION
 
@@ -54,4 +54,4 @@ array([0, 1])
 acme_clas = ACME(model, 'target', K=50, task = 'class', label_class = 1 )
 acme_clas = acme_clas.fit(dataset) 
 ```
-![ACME clas plot](image/acme_clas.png)
+![ACME clas plot](image/glass/acme_class.pdf)
