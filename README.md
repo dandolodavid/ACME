@@ -25,7 +25,7 @@ acme_reg.summary_plot()
 acme_reg.bar_plot()
 ```
 
-![ACME bar plot](image/boston_comparison/barplot/acme_bar_rf.pdf)
+![ACME bar plot](image/barplot/acme_bar_rf.pdf)
 
 ``` python
 acme_reg.feature_importance()
