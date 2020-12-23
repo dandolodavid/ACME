@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
-from utils import create_quantile_feature_matrix, plot_express, create_level_variable_matrix, most_frequent, clean_list
-from ACME_function import _computeACME
+from ACME.utils import create_quantile_feature_matrix, plot_express, create_level_variable_matrix, most_frequent, clean_list
+from ACME.ACME_function import _computeACME
 import plotly.express as px
 
 class ACME():

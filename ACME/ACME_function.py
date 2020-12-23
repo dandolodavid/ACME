@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from utils import create_quantile_feature_matrix, create_level_variable_matrix, most_frequent, clean_list, calculate_quantile_position, nearest_quantile
+from ACME.utils import create_quantile_feature_matrix, create_level_variable_matrix, most_frequent, clean_list, calculate_quantile_position, nearest_quantile
 
 def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_table, label, task, local, K, robust = False, class_to_analyze = None, table = None, local_table = None ):
     

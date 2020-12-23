@@ -69,7 +69,6 @@ def nearest_quantile(dataframe, local_quantile):
     return q_list[np.argmin(np.abs(q_list - local_quantile))]
 
 def plot_express(plot_df, meta):
-    from data_science.plot.plotly_base import PlotlyBase
     import plotly.express as px
     
     x = meta['x']
