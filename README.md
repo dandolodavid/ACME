@@ -7,7 +7,7 @@ Model interpretability is nowadays a major field of research in machine learning
 ### INSTALL 
 Install with the command:
 
-pip install -i https://test.pypi.org/simple/ ACME
+pip install statwolfACME==1.0.0
 
 ## ACME:
 
