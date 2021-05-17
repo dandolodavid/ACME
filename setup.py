@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    name='ACME',
+    name='statwolfACME',
     version='1.0.0',    
     description='ACME - Accelerated Model Explainability',
     url='https://github.com/dandolodavid/ACME',
@@ -15,8 +15,8 @@ setup(
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Science/Research',
         'Intended Audience :: Information Technology',
-        'Intended Audience :: Legal Industry'
-        'Intended Audience :: Manufacturing'
+        'Intended Audience :: Legal Industry',
+        'Intended Audience :: Manufacturing',
         'License :: OSI Approved :: BSD License',
         'Programming Language :: Python :: 3',
         'Programming Language :: Python :: 3.4',

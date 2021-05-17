@@ -2,11 +2,11 @@ import pandas as pd
 import numpy as np
 from ACME.utils import create_quantile_feature_matrix, create_level_variable_matrix, most_frequent, clean_list, calculate_quantile_position, nearest_quantile
 
-def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_table, label, task, local, K, robust = False, class_to_analyze = None, table = None, local_table = None ):
-    
+def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_table, label, task, local, K, robust = False, class_to_analyze = None, 
+                table = None, local_table = None, score_function = None ):
     '''
-    Params:
-    ------
+    Parameters:
+    ----------
     - model: object
         the object of the model
     - dataframe: pd.DataFrame
@@ -21,6 +21,27 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
         dataframe with as index the name of the feature
     - label: str
         name of the target_feature
+    - task: str
+        type of model task {'regression','reg','r','c','class','classification'}
+    - local: int, str
+        index of the local observation
+    - K: int
+        number of quantiles to use
+    - robust : bool (default False)
+        if uses the range [0.05, 0.95] for the quantiles instead fo [0,1]
+    - class_to_analyze: int, str (default None)
+        class to analyze in case of classification. If None the entire classification system is analyzed. Must be specified in case of local AcME
+    - score_function: function
+        function used to compute the predictions
+    - table : pd.DataFrame()
+        empty df
+    - local_table : pd.DataFrame()
+        empty df
+
+    Returns:
+    ----------
+    - table : pd.DataFrame
+    - importance_table : pd.DataFrame
     '''    
 
     # for every feature, we compute the predictions based on the feature quantiles
@@ -35,12 +56,15 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
         cat_features = []
 
     for feature in importance_table.index:
+
         df = pd.DataFrame()
         local_df = pd.DataFrame()
     
         if local is None:
+            
             #for every quantitative feature, we compute the predictions based on the feature quantiles and create the variable-quantile matrix
-            #for every quantitative feature, we compute the predictions based on the feature levels and create the variable-levels matrix         
+            #for every qualitative feature, we compute the predictions based on the feature levels and create the variable-levels matrix         
+            
             if feature in cat_features:
                 Z_quantitative = pd.DataFrame( numeric_df.mean() ).T
                 if cat_features != []:
@@ -49,7 +73,6 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
                 else:
                     Z = Z_quantitative
             else:
-
                 Z_quantitative = create_quantile_feature_matrix( numeric_df, feature, K, local = None, robust = robust )
                 if cat_features != []:
                     Z_qualitative = pd.DataFrame( cat_df.apply(lambda x: most_frequent(x), axis=0) ).T
@@ -57,13 +80,18 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
                 else:
                     Z = Z_quantitative
 
-
             x_mean = pd.DataFrame( numeric_df.mean() ).T
+
             if cat_features != []:
                 x_most_freq = pd.DataFrame( cat_df.apply( lambda x : most_frequent(x) )).T
                 x_mean = pd.concat( [x_mean,x_most_freq], axis = 1 )
+
+            if score_function:
+                #if the score function is available
+                predictions = score_function( model, Z.drop(columns='quantile')[features] )
+                mean_pred = score_function( model, x_mean[features])[0]
                 
-            if task  == 'r' or task =='reg' or task =='regression':
+            elif task  == 'r' or task =='reg' or task =='regression':
                 
                 #mean prediction
                 mean_pred = model.predict(x_mean[features])[0]
@@ -159,7 +187,7 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
             near_quantile = nearest_quantile(local_df, local_quantile)
 
             local_df['size'] = 0.2
-            local_df.loc[local_df['quantile'] == near_quantile,'size'] = 1.5
+            local_df.loc[local_df['quantile'] == near_quantile,'size'] = 1.0
 
             local_df['local_quantile'] = near_quantile
             local_df.index = np.repeat(feature, len(predictions))
