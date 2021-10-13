@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from ACME.utils import create_quantile_feature_matrix, create_level_variable_matrix, most_frequent, clean_list, calculate_quantile_position, nearest_quantile
+from ACME.utils import create_quantile_feature_matrix, create_level_variable_matrix, most_frequent, calculate_quantile_position, nearest_quantile
 
 def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_table, label, task, local, K, robust = False, class_to_analyze = None, 
                 table = None, local_table = None, score_function = None ):
@@ -154,15 +154,20 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
                     Z = pd.concat( [ Z_qualitative.loc[Z_qualitative.index.repeat(len(Z_quantitative))].reset_index(drop=True), Z_quantitative.reset_index(drop=True) ] , axis = 1  )
                 else:
                     Z = Z_quantitative
-                
-            if task == 'r' or task=='reg' or task=='regression':
 
+            if score_function:
+                #if the score function is available
+                x_local = pd.DataFrame(dataframe.drop(columns = [label]).loc[local]).T
+                predictions = score_function( model, Z.drop(columns='quantile')[features] )
+                local_pred = score_function( model, x_local[features])[0]
+
+            elif task == 'r' or task=='reg' or task=='regression':
                 #mean prediction
                 x_local = pd.DataFrame(dataframe.drop(columns = [label]).loc[local]).T
                 local_pred = model.predict(x_local[features])[0]
                 #prediciton
                 predictions = model.predict(Z.drop(columns='quantile')[features])
-
+                
             elif task == 'c' or task=='class' or task=='classification':
 
                 #mean prediction
@@ -175,7 +180,7 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
 
              #build the dataframe with the standardize_effect, the predictions and the original 
 
-            local_quantile =  calculate_quantile_position(dataframe, feature, local)
+            local_value = dataframe.loc[local][feature]
 
             local_df['effect'] = predictions
             local_df['predictions'] = predictions
@@ -184,8 +189,8 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
             local_df['quantile'] = Z['quantile'].values
             local_df['Importance'] = importance_table.loc[feature,'Importance']
             
-            near_quantile = nearest_quantile(local_df, local_quantile)
-
+            near_quantile = nearest_quantile(local_df, local_value)
+            
             local_df['size'] = 0.2
             local_df.loc[local_df['quantile'] == near_quantile,'size'] = 1.0
 
@@ -194,7 +199,7 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
             local_table = pd.concat([local_table, local_df])
         
     if local is None:            
-        return table, importance_table
+        return table, importance_table, mean_pred
     else:
         return local_table, importance_table
    

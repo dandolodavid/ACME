@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from collections import Counter 
-  
+
 def most_frequent(List): 
     occurence_count = Counter(List) 
     return occurence_count.most_common(1)[0][0]
@@ -63,10 +63,11 @@ def calculate_quantile_position(dataframe,column,local):
     ecdf = ECDF(dataframe[column])
     return ecdf(dataframe.loc[local,column])    
 
-def nearest_quantile(dataframe, local_quantile):
+def nearest_quantile(dataframe, local_value):
 
-    q_list = dataframe['quantile'].unique()
-    return q_list[np.argmin(np.abs(q_list - local_quantile))]
+    original_list = dataframe['original'].unique()
+    quantile = dataframe.loc[ dataframe.original == original_list[np.argmin(np.abs(original_list - local_value))],  'quantile']
+    return quantile.values[0]
 
 def plot_express(plot_df, meta):
     import plotly.express as px
@@ -79,7 +80,8 @@ def plot_express(plot_df, meta):
         title = 'Local AcME: observation ID ' + str(meta['index']) + '. Predicted: ' + str(round(x,3))
         if 'label_class' in meta.keys():
             title = title + ' ( label_class : ' + str(meta['label_class']) + ' )'
-        fig = px.scatter(plot_df, x="effect", y='feature', color="quantile", size = 'size', color_continuous_scale = color_scale,labels = {'effect':label_x,'feature':'Feature'}, title = title)
+        fig = px.scatter(plot_df, x="effect", y='feature', color="quantile", size = 'size', hover_data=['original'],
+                        color_continuous_scale = color_scale,labels = {'effect':label_x,'feature':'Feature'}, title = title)
     else:
         label_x = 'standardized effect'
         color_scale = ['royalblue','red']
@@ -88,11 +90,21 @@ def plot_express(plot_df, meta):
             title = title + ' : regression ' 
         else:
             title = title + ' : classification. Label_class : ' + str(meta['label_class']) 
-        fig = px.scatter(plot_df, x="effect", y='feature', color="quantile", color_continuous_scale = color_scale,labels = {'effect':label_x,'feature':'Feature'}, title = title)
+        fig = px.scatter(plot_df, x="effect", y='feature', color="quantile", hover_data=['original'],
+                        color_continuous_scale = color_scale,labels = {'effect':label_x,'feature':'Feature'}, title = title)
 
     y_bottom = meta['y_bottom']
     y_top = meta['y_top']
     
-    fig.update_layout(shapes=[dict( type="line", x0=x, y0=y_bottom, x1=x, y1=y_top, line = dict(color="black", width=2 ,dash="dash" ) )] )
+    if meta['local']:
+        if x > meta['base_line']:
+            color_local = 'red'
+        else:
+            color_local = 'blue' 
+        fig.update_layout( shapes = [dict( type="line", x0 = x, y0 = y_bottom, x1 = x, y1 = y_top, line = dict(color = color_local , width = 2 ,dash = "dash" ) ),
+                                    #dict( type="line", x0 = meta['base_line'], y0 = y_bottom, x1 = meta['base_line'], y1 = y_top, line = dict(color="black", width=2 ,dash="dash" ) ) 
+                                    ] )
+    else:
+        fig.update_layout(shapes=[dict( type="line", x0=x, y0=y_bottom, x1=x, y1=y_top, line = dict(color="black", width=2 ,dash="dash" ) )] )
     
     return fig

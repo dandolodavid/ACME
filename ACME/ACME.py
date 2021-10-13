@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from ACME.utils import create_quantile_feature_matrix, plot_express, create_level_variable_matrix, most_frequent, clean_list
+from ACME.utils import plot_express, clean_list
 from ACME.ACME_function import _computeACME
 import plotly.express as px
 
@@ -62,7 +62,7 @@ class ACME():
 
         #if regression
         if self._task  == 'r' or self._task =='reg' or self._task =='regression':
-            out_table, out = _computeACME( model = self._model, dataframe = dataframe, features = self._features,  
+            out_table, out, mean_pred = _computeACME( model = self._model, dataframe = dataframe, features = self._features,  
             numeric_df = self._quantitative_df, cat_df = self._qualitative_df, importance_table = out, score_function = self._score_function,
             label = self._target, task = self._task, local = None, K = self._K, robust = robust, table = out_table )
 
@@ -75,7 +75,7 @@ class ACME():
                 label_list = [class_to_analyze]
             
             for i in label_list:
-                out_table, out = _computeACME( model = self._model, dataframe = dataframe, features = self._features, 
+                out_table, out, mean_pred = _computeACME( model = self._model, dataframe = dataframe, features = self._features, 
                 numeric_df = self._quantitative_df, cat_df = self._qualitative_df, importance_table = out, score_function = self._score_function,
                 label = self._target, task = self._task,local = None, K=self._K, class_to_analyze = i, table = out_table )
                 
@@ -95,6 +95,7 @@ class ACME():
         #define the output
         self._meta = out_table
         self._feature_importance = out.sort_values('Importance', ascending = False)
+        self._mean_pred = mean_pred
 
         return self
 
@@ -167,6 +168,7 @@ class ACME():
                 table = self._local_meta
                 meta['local'] = True
                 meta['index'] = self._local 
+                meta['base_line'] = self._mean_pred
             else:
                 table = self._meta
                 meta['local'] = False
@@ -211,4 +213,14 @@ class ACME():
 
     def local_table(self):
         return self._local_meta.drop(columns='size')
+
+    # def local_feature_importance(self):
+    #     features_quantile = [ self._local_meta.drop(columns='size').loc[f].local_quantile.unique()[0] for f in self._features ]
+    #     features_quantile = pd.Series(features_quantile, index = self._features)
+    #     local_effect = []
+    #     for f in self._features:
+    #         meta_f = self._meta.loc[f]
+    #         local_effect.append( meta_f.loc[meta_f['quantile'] == features_quantile[f], 'effect' ].values[0] )
+        
+    #     return pd.DataFrame(local_effect, index=self._features, columns=['local_effect']).sort_values('local_effect',ascending=False,key=abs)
 
