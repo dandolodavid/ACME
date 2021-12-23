@@ -37,6 +37,8 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
         empty df
     - local_table : pd.DataFrame()
         empty df
+    - score_function: fun(model, x)
+        a function that has in input the model and the input data to realize the prediction. It must return a numeric score
 
     Returns:
     ----------
@@ -150,11 +152,11 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
             else:
                 Z_quantitative = create_quantile_feature_matrix( numeric_df, feature, K, local = local, robust = robust )
                 if cat_features != []:
-                    Z_qualitative = pd.DataFrame( cat_df.apply(lambda x: most_frequent(x), axis=0) ).T
+                    Z_qualitative = pd.DataFrame( cat_df.loc[local] ).T
                     Z = pd.concat( [ Z_qualitative.loc[Z_qualitative.index.repeat(len(Z_quantitative))].reset_index(drop=True), Z_quantitative.reset_index(drop=True) ] , axis = 1  )
                 else:
                     Z = Z_quantitative
-
+            
             if score_function:
                 #if the score function is available
                 x_local = pd.DataFrame(dataframe.drop(columns = [label]).loc[local]).T
@@ -177,7 +179,7 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
                     predictions = model.predict_proba(Z.drop(columns='quantile')[features])[:,class_to_analyze]
                 except:
                     predictions = model.predict_proba(Z.drop(columns='quantile')[features])[class_to_analyze]
-
+                    
              #build the dataframe with the standardize_effect, the predictions and the original 
 
             local_value = dataframe.loc[local][feature]
@@ -188,8 +190,8 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
             local_df['original'] = Z[feature].values
             local_df['quantile'] = Z['quantile'].values
             local_df['Importance'] = importance_table.loc[feature,'Importance']
-            
-            near_quantile = nearest_quantile(local_df, local_value)
+           
+            near_quantile = nearest_quantile(local_df, local_value, feature in cat_features)
             
             local_df['size'] = 0.2
             local_df.loc[local_df['quantile'] == near_quantile,'size'] = 1.0

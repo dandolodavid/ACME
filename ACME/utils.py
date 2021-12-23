@@ -63,10 +63,14 @@ def calculate_quantile_position(dataframe,column,local):
     ecdf = ECDF(dataframe[column])
     return ecdf(dataframe.loc[local,column])    
 
-def nearest_quantile(dataframe, local_value):
+def nearest_quantile(dataframe, local_value, cat_features):
 
     original_list = dataframe['original'].unique()
-    quantile = dataframe.loc[ dataframe.original == original_list[np.argmin(np.abs(original_list - local_value))],  'quantile']
+    if cat_features:
+        quantile = dataframe.loc[ dataframe.original == local_value,  'quantile']
+    else:
+        quantile = dataframe.loc[ dataframe.original == original_list[np.argmin(np.abs(original_list - local_value))],  'quantile']
+    
     return quantile.values[0]
 
 def plot_express(plot_df, meta):
