@@ -100,3 +100,15 @@ acme_clas = acme_clas.fit(dataset)
 ```
 
 ![ACME clas plot](image/readme/class.png)
+
+#### 2.3) SCORE FUNCTION
+The model in this case is an isolation forest model
+
+```python
+
+def score_function(model, data):
+    return model.decision_function(data)
+
+acme_ifo = ACME(ifo, 'AD_score', K=50, task='regression', score_function=score_function, quantitative_features=features)
+acme_ifo = acme_ifo.fit(dataset, robust = True)
+```
