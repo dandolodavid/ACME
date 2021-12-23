@@ -58,18 +58,18 @@ pip install statwolfACME
 
 The actual implementation works with model objects that have 'predict()' methods (sklearn style model).
 
-``` python
+```python
 acme_reg = ACME(model, 'target', K=50)
 acme_reg = acme_reg.fit(dataset) 
 ```
 
-``` python
+```python
 acme_reg.summary_plot()
 ```
 
 ![ACME summary plot](image/readme/reg.png)
 
-``` python
+```python
 acme_reg.bar_plot()
 ```
 
@@ -77,7 +77,7 @@ acme_reg.bar_plot()
 
 ##### 2.1.1) LOCAL
 
-``` python
+```python
 acme_local = acme_reg.fit_local(dataset, local=100)
 acme_local.summary_plot(local=True)
 ```
@@ -89,12 +89,12 @@ acme_local.summary_plot(local=True)
 The actual implementation works with model objects that have 'predict_proba()' methods.
 The classification acme version works as the regression, but requires to specify the class we are looking for explanation.
 
-``` python
+```python
 model.classes_
 array([0, 1])
 ```
 
-``` python
+```python
 acme_clas = ACME(model, 'target', K=50, task = 'class', label_class = 1 )
 acme_clas = acme_clas.fit(dataset) 
 ```
