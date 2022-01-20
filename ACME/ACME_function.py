@@ -159,13 +159,19 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
             
             if score_function:
                 #if the score function is available
-                x_local = pd.DataFrame(dataframe.drop(columns = [label]).loc[local]).T
+                if label in dataframe.columns.tolist():
+                    x_local = pd.DataFrame(dataframe.drop(columns = [label]).loc[local]).T
+                else:
+                    x_local = pd.DataFrame(dataframe).loc[local].T
                 predictions = score_function( model, Z.drop(columns='quantile')[features] )
-                local_pred = score_function( model, x_local[features])[0]
+                local_pred = score_function( model, x_local[features].values)[0]
 
             elif task == 'r' or task=='reg' or task=='regression':
                 #mean prediction
-                x_local = pd.DataFrame(dataframe.drop(columns = [label]).loc[local]).T
+                if label in dataframe.columns.tolist():
+                    x_local = pd.DataFrame(dataframe.drop(columns = [label]).loc[local]).T
+                else:
+                    x_local = pd.DataFrame(dataframe).loc[local].T
                 local_pred = model.predict(x_local[features])[0]
                 #prediciton
                 predictions = model.predict(Z.drop(columns='quantile')[features])
