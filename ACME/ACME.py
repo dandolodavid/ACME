@@ -1,16 +1,18 @@
 import pandas as pd
 import numpy as np
 from ACME.utils import plot_express, clean_list
-from ACME.ACME_function import _computeACME
+from ACME.ACME_function import _computeACME, _build_anomaly_detection_feature_importance_table, _computeAnomalyDetectionImportance
 import plotly.express as px
+import plotly.graph_objects as go
 
 class ACME():
     
-    def __init__(self, model, target, quantitative_features = [], qualitative_features = [], K = 50, task = 'regression', score_function = None ):
+    def __init__(self, model, target, features = [], qualitative_features = [], K = 50, task = 'regression', score_function = None ):
 
         self._model = model
         self._target = target
-        self._quantitative_features = quantitative_features
+        self._features = features
+        self._quantitative_features = list(np.setdiff1d(features, qualitative_features))
         self._qualitative_features = qualitative_features
         self._task = task
         self._meta = None
@@ -214,13 +216,63 @@ class ACME():
     def local_table(self):
         return self._local_meta.drop(columns='size')
 
-    # def local_feature_importance(self):
-    #     features_quantile = [ self._local_meta.drop(columns='size').loc[f].local_quantile.unique()[0] for f in self._features ]
-    #     features_quantile = pd.Series(features_quantile, index = self._features)
-    #     local_effect = []
-    #     for f in self._features:
-    #         meta_f = self._meta.loc[f]
-    #         local_effect.append( meta_f.loc[meta_f['quantile'] == features_quantile[f], 'effect' ].values[0] )
-        
-    #     return pd.DataFrame(local_effect, index=self._features, columns=['local_effect']).sort_values('local_effect',ascending=False,key=abs)
+    def anomaly_detection_importance(self):
+        '''
+        Provides an ad hoc explaination for anomaly detection, studied for local interpretability
+        The score will show what features can altered the prediction from normal to anomalies and viceversa.
+        Please note that require to already called the local acme interpretability on a specific observation
+        '''
+        local_table = self._local_meta.drop(columns='size').copy()
+        return _computeAnomalyDetectionImportance(local_table)      
 
+    def anomaly_detection_feature_exploration_plot(self, feature):
+        '''
+        Generate a plot for local observation that, choosen a specific feature, shows how the anomaly score can change beacuse of the feature.
+        
+        Params:
+        ---------
+        - feature: str
+            name of the feature to explore
+        
+        Return:
+        ---------
+        - plolty figure
+        '''
+        local_table = self._local_meta.drop(columns='size').copy()
+        imp_table = _build_anomaly_detection_feature_importance_table(local_table, feature)
+        actual_score = imp_table['mean_prediction'].values[0]
+        actual_values = imp_table.loc[imp_table['quantile'] == imp_table['local_quantile'].values[0], 'original'].values[0]
+        color = 'red' if actual_score > 0 else 'blue'
+
+        fig = go.Figure()
+        fig.add_bar(x = imp_table.loc[imp_table.direction=='anomalies','effect'], y = imp_table.loc[imp_table.direction=='anomalies','original'].values, 
+        base =  imp_table['mean_prediction'].values[0], marker=dict(color = 'red'), name = 'Anomalies',orientation='h')
+
+        fig.add_bar(x = imp_table.loc[imp_table.direction=='normal','effect'], y = imp_table.loc[imp_table.direction=='normal','original'].values, 
+        base =  imp_table['mean_prediction'].values[0], marker=dict(color = 'blue'), name = 'Normal', orientation='h')
+
+        fig.add_scatter( y = [ imp_table['original'].values[0]*0.9 ,imp_table['original'].values[-1]*1.05 ],
+                        x = [ actual_score,actual_score ], mode='lines',
+                        name = 'actual score', line=dict(color = color ,width=2,dash="dash") )
+
+        fig.add_scatter( y = [ imp_table['original'].values[0]*0.9 ,imp_table['original'].values[-1]*1.05 ],
+                        x = [ 0,0 ], mode='lines',
+                        line=dict(color="black",width=2),  name = 'change point')
+
+
+        fig.add_scatter( x = [ actual_score ],
+                        y = [ actual_values], mode='markers',
+                        marker=dict(size=20,color=color),  name = 'current value')
+
+        fig.update_layout(title='Feature ' + str(feature), 
+                        yaxis_title = "Feature values",
+                        xaxis_title = "Anomaly Score", autosize=True )
+
+        return fig
+    
+    def anomaly_detection_feature_exploration_table(self, feature):
+        '''
+        '''
+        local_table = self._local_meta.drop(columns='size').copy()
+        imp_table = _build_anomaly_detection_feature_importance_table(local_table, feature)
+        return imp_table

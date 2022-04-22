@@ -95,7 +95,8 @@ def plot_express(plot_df, meta):
         else:
             title = title + ' : classification. Label_class : ' + str(meta['label_class']) 
         fig = px.scatter(plot_df, x="effect", y='feature', color="quantile", hover_data=['original'],
-                        color_continuous_scale = color_scale,labels = {'effect':label_x,'feature':'Feature'}, title = title)
+                       color_continuous_scale = color_scale,
+                       labels = {'effect':label_x,'feature':'Feature'}, title = title)
 
     y_bottom = meta['y_bottom']
     y_top = meta['y_top']

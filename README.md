@@ -13,10 +13,10 @@ pip install statwolfACME
 
 ### 1) DOCS:
 
-- ACME( model, target, quantitative_features = [], qualitative_features = [], K = 50, task = 'regression', score_function = None ):
+- ACME( model, target, features = [], qualitative_features = [], K = 50, task = 'regression', score_function = None ):
     - model : the model object, it must have the *predict* method or the ad-hoc parameter *score_function* is required
     - target : str column name with the target features. Typically, it is the predicted features (regression and classification), while using the score function could be a particular column (example: in Anomaly detection, the column with the anomaly score)
-    - quantitative_features :  list of string with the columns name for numerical features
+    - features :  list of string with the columns name for all the model features (given in the same order of the model)
     - qualitative_features : list of string with the columns name for categorical features
     - K : number of quantile used in the AcME procedure
     - task :  str with accepted values {'regression','reg','r','c','class','classification'}. It declares the task of the model. When score_function is not None, the parameters is not necessary
@@ -107,8 +107,11 @@ The model in this case is an isolation forest model
 ```python
 
 def score_function(model, data):
-    return model.decision_function(data)
+    try: # for global
+        return model.decision_function(data)
+    except: # for local
+        return model.decision_function(data.reshape(1,-1))
 
-acme_ifo = ACME(ifo, 'AD_score', K=50, task='regression', score_function=score_function, quantitative_features=features)
+acme_ifo = ACME(ifo, 'AD_score', K=50, task='regression', score_function=score_function, features=features)
 acme_ifo = acme_ifo.fit(dataset, robust = True)
 ```

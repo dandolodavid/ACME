@@ -210,4 +210,58 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
         return table, importance_table, mean_pred
     else:
         return local_table, importance_table
-   
+
+
+##------------------------------------------------------------ ANOMALY DETECTION ------------------------------------------------------------
+
+def _build_anomaly_detection_feature_importance_table(local_table, feature):
+    '''
+    Params:
+    ---------
+    - feature: str
+        name of the feature to explore
+    '''
+    imp_table = local_table.loc[feature]   
+    imp_table['direction'] = 'normal'
+    imp_table.loc[imp_table.predictions > 0,'direction'] = 'anomalies'
+    imp_table['effect'] = np.abs(imp_table['predictions'] - imp_table['mean_prediction'] )*np.sign(imp_table['predictions'])
+
+    return imp_table
+
+def _computeAnomalyDetectionImportance(local_table):
+    '''
+    '''
+    change_anomalies = {}
+    no_change_anomalies = {}
+    
+    importance_change = {}
+    importance_no_change = {}
+
+    for feature in local_table.index.unique():
+        
+        min_pred = local_table.loc[feature,'predictions'].min()
+        max_pred = local_table.loc[feature,'predictions'].max()
+
+        if np.sign(min_pred) !=  np.sign(max_pred):
+            change_anomalies[feature] = [min_pred,max_pred]
+            importance_change[feature] = max_pred-min_pred
+        else:
+            no_change_anomalies[feature] = [min_pred,max_pred]
+            if np.sign(max_pred) == 1: #if anomalous
+                np.abs(0 - max_pred) #the score must be higher if the feature can push to a more anomalous state the feature
+            if np.sign(min_pred) == -1:
+                np.abs(0 - min_pred)
+
+            importance_no_change = np.abs(max_pred)
+    
+    importance_change_df = pd.concat([
+                pd.DataFrame(importance_change,index=['AD importance score']).T,
+                pd.DataFrame(change_anomalies,index=['Min','Max']).T]
+                ,axis=1).sort_values('AD importance score',ascending=False)
+    
+    #importance_no_change = pd.concat([
+    #            pd.DataFrame(importance_no_change,index=['AD importance score']).T,
+    #            pd.DataFrame(no_change_anomalies,index=['Min','Max']).T]
+    #            ,axis=1).sort_values('AD importance score',ascending=False)
+
+    return importance_change_df
