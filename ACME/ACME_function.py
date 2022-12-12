@@ -14,9 +14,9 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
     - features: [str] 
         list of the features name in SAME ORDER as the the model input
     - numeric_df: pd.DataFrame
-        splitted dataframe with only numerical (quantitative) features
+        splitted dataframe with only numerical (numeric) features
     - cat_df: pd.DataFrame
-        splitted dataframe with only numerical (quantitative) features
+        splitted dataframe with only numerical (numeric) features
     - importance_table: pd.DataFrame
         dataframe with as index the name of the feature
     - label: str
@@ -64,23 +64,23 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
     
         if local is None:
             
-            #for every quantitative feature, we compute the predictions based on the feature quantiles and create the variable-quantile matrix
-            #for every qualitative feature, we compute the predictions based on the feature levels and create the variable-levels matrix         
+            #for every numeric feature, we compute the predictions based on the feature quantiles and create the variable-quantile matrix
+            #for every cat feature, we compute the predictions based on the feature levels and create the variable-levels matrix         
             
             if feature in cat_features:
-                Z_quantitative = pd.DataFrame( numeric_df.mean() ).T
+                Z_numeric = pd.DataFrame( numeric_df.mean() ).T
                 if cat_features != []:
-                    Z_qualitative = create_level_variable_matrix( cat_df, feature,local = None) 
-                    Z = pd.concat( [ Z_quantitative.loc[Z_quantitative.index.repeat(len(Z_qualitative))].reset_index(drop=True) , Z_qualitative.reset_index(drop=True) ] , axis = 1 )
+                    Z_cat = create_level_variable_matrix( cat_df, feature,local = None) 
+                    Z = pd.concat( [ Z_numeric.loc[Z_numeric.index.repeat(len(Z_cat))].reset_index(drop=True) , Z_cat.reset_index(drop=True) ] , axis = 1 )
                 else:
-                    Z = Z_quantitative
+                    Z = Z_numeric
             else:
-                Z_quantitative = create_quantile_feature_matrix( numeric_df, feature, K, local = None, robust = robust )
+                Z_numeric = create_quantile_feature_matrix( numeric_df, feature, K, local = None, robust = robust )
                 if cat_features != []:
-                    Z_qualitative = pd.DataFrame( cat_df.apply(lambda x: most_frequent(x), axis=0) ).T
-                    Z = pd.concat( [ Z_qualitative.loc[Z_qualitative.index.repeat(len(Z_quantitative))].reset_index(drop=True), Z_quantitative.reset_index(drop=True) ] , axis = 1  )
+                    Z_cat = pd.DataFrame( cat_df.apply(lambda x: most_frequent(x), axis=0) ).T
+                    Z = pd.concat( [ Z_cat.loc[Z_cat.index.repeat(len(Z_numeric))].reset_index(drop=True), Z_numeric.reset_index(drop=True) ] , axis = 1  )
                 else:
-                    Z = Z_quantitative
+                    Z = Z_numeric
 
             x_mean = pd.DataFrame( numeric_df.mean() ).T
 
@@ -143,19 +143,19 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
         else: #if local
             #the procedure is the same but we must change the baseline and the scale of the effect (now the original prediction scale)
             if feature in cat_features:
-                Z_quantitative = pd.DataFrame(numeric_df.loc[local]).T
+                Z_numeric = pd.DataFrame(numeric_df.loc[local]).T
                 if cat_features != []:
-                    Z_qualitative = create_level_variable_matrix(cat_df, feature,local = local)
-                    Z = pd.concat( [ Z_quantitative.loc[Z_quantitative.index.repeat(len(Z_qualitative))].reset_index(drop=True) , Z_qualitative.reset_index(drop=True) ] , axis = 1 )
+                    Z_cat = create_level_variable_matrix(cat_df, feature,local = local)
+                    Z = pd.concat( [ Z_numeric.loc[Z_numeric.index.repeat(len(Z_cat))].reset_index(drop=True) , Z_cat.reset_index(drop=True) ] , axis = 1 )
                 else:
-                    Z = Z_quantitative
+                    Z = Z_numeric
             else:
-                Z_quantitative = create_quantile_feature_matrix( numeric_df, feature, K, local = local, robust = robust )
+                Z_numeric = create_quantile_feature_matrix( numeric_df, feature, K, local = local, robust = robust )
                 if cat_features != []:
-                    Z_qualitative = pd.DataFrame( cat_df.loc[local] ).T
-                    Z = pd.concat( [ Z_qualitative.loc[Z_qualitative.index.repeat(len(Z_quantitative))].reset_index(drop=True), Z_quantitative.reset_index(drop=True) ] , axis = 1  )
+                    Z_cat = pd.DataFrame( cat_df.loc[local] ).T
+                    Z = pd.concat( [ Z_cat.loc[Z_cat.index.repeat(len(Z_numeric))].reset_index(drop=True), Z_numeric.reset_index(drop=True) ] , axis = 1  )
                 else:
-                    Z = Z_quantitative
+                    Z = Z_numeric
             
             if score_function:
                 #if the score function is available

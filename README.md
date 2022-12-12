@@ -13,11 +13,11 @@ pip install statwolfACME
 
 ### 1) DOCS:
 
-- ACME( model, target, features = [], qualitative_features = [], K = 50, task = 'regression', score_function = None ):
+- ACME( model, target, features = [], cat_features = [], K = 50, task = 'regression', score_function = None ):
     - model : the model object, it must have the *predict* method or the ad-hoc parameter *score_function* is required
     - target : str column name with the target features. Typically, it is the predicted features (regression and classification), while using the score function could be a particular column (example: in Anomaly detection, the column with the anomaly score)
     - features :  list of string with the columns name for all the model features (given in the same order of the model)
-    - qualitative_features : list of string with the columns name for categorical features
+    - cat_features : list of string with the columns name for categorical features
     - K : number of quantile used in the AcME procedure
     - task :  str with accepted values {'regression','reg','r','c','class','classification'}. It declares the task of the model. When score_function is not None, the parameters is not necessary
     - score_function : function that has as first input the model and second the input data to realize the prediction. It must return a numeric score

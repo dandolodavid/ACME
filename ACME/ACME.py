@@ -7,13 +7,13 @@ import plotly.graph_objects as go
 
 class ACME():
     
-    def __init__(self, model, target, features = [], qualitative_features = [], K = 50, task = 'regression', score_function = None ):
+    def __init__(self, model, target, features = [], cat_features = [], K = 50, task = 'regression', score_function = None ):
 
         self._model = model
         self._target = target
         self._features = features
-        self._quantitative_features = list(np.setdiff1d(features, qualitative_features))
-        self._qualitative_features = qualitative_features
+        self._numeric_features = list(np.setdiff1d(features, cat_features))
+        self._cat_features = cat_features
         self._task = task
         self._meta = None
         self._K = K
@@ -21,26 +21,26 @@ class ACME():
 
     def fit(self, dataframe, robust = False, label_class = None ):    
     
-        #if qualitative features and quantitative features are not specified then all the columns of the dataset (not the target) are used as quantitative feature
-        if self._quantitative_features == [] and self._qualitative_features == []:
-            self._quantitative_features = dataframe.drop(columns=self._target).columns.to_list()
+        #if cat features and numeric features are not specified then all the columns of the dataset (not the target) are used as numeric feature
+        if self._numeric_features == [] and self._cat_features == []:
+            self._numeric_features = dataframe.drop(columns=self._target).columns.to_list()
 
-        #create the dataframe of quantitative feature
-        if self._quantitative_features == []:
-            if self._qualitative_features == [] :
-                self._quantitative_features = dataframe.drop(columns= [self._target]).columns.to_list()
+        #create the dataframe of numeric feature
+        if self._numeric_features == []:
+            if self._cat_features == [] :
+                self._numeric_features = dataframe.drop(columns= [self._target]).columns.to_list()
             else:
-                self._quantitative_features = dataframe.drop(columns= [self._target] + self._qualitative_features ).columns.to_list()
+                self._numeric_features = dataframe.drop(columns= [self._target] + self._cat_features ).columns.to_list()
 
-        self._quantitative_df = dataframe[ self._quantitative_features ].copy()
+        self._numeric_df = dataframe[ self._numeric_features ].copy()
         
-        #create the dataframe for qualitative feature
-        self._qualitative_df = None
-        if not self._qualitative_features == []:
-           self._qualitative_df = dataframe[ self._qualitative_features ].copy()
+        #create the dataframe for cat feature
+        self._cat_df = None
+        if not self._cat_features == []:
+           self._cat_df = dataframe[ self._cat_features ].copy()
 
         #we save the features used by the model in the original order (necessary to correctly compute the predictiom)
-        self._features = clean_list( dataframe.columns.to_list(), self._quantitative_features + self._qualitative_features)
+        self._features = clean_list( dataframe.columns.to_list(), self._numeric_features + self._cat_features)
 
         #if the task is the classification we must set the class to analyze 
         #in input the name of the class is passed, so we create a procedure to map from the label to the class number in the probability matrix
@@ -59,13 +59,13 @@ class ACME():
             self._label_class = label_class
 
         #create conteiners for acme results
-        out = pd.DataFrame(index= self._quantitative_features  + self._qualitative_features )
+        out = pd.DataFrame(index= self._numeric_features  + self._cat_features )
         out_table = pd.DataFrame()
 
         #if regression
         if self._task  == 'r' or self._task =='reg' or self._task =='regression':
             out_table, out, mean_pred = _computeACME( model = self._model, dataframe = dataframe, features = self._features,  
-            numeric_df = self._quantitative_df, cat_df = self._qualitative_df, importance_table = out, score_function = self._score_function,
+            numeric_df = self._numeric_df, cat_df = self._cat_df, importance_table = out, score_function = self._score_function,
             label = self._target, task = self._task, local = None, K = self._K, robust = robust, table = out_table )
 
         #if classification
@@ -78,7 +78,7 @@ class ACME():
             
             for i in label_list:
                 out_table, out, mean_pred = _computeACME( model = self._model, dataframe = dataframe, features = self._features, 
-                numeric_df = self._quantitative_df, cat_df = self._qualitative_df, importance_table = out, score_function = self._score_function,
+                numeric_df = self._numeric_df, cat_df = self._cat_df, importance_table = out, score_function = self._score_function,
                 label = self._target, task = self._task,local = None, K=self._K, class_to_analyze = i, table = out_table )
                 
                 if len(label_list) > 1:
@@ -123,7 +123,7 @@ class ACME():
         self._class_to_analyze = class_to_analyze
         self._label_class = label_class
 
-        #if the fitting procedure is not done, we frist compute the overall importance and create the quantitative and qualitative dataframe
+        #if the fitting procedure is not done, we frist compute the overall importance and create the numeric and cat dataframe
         if self._meta is None:
             self = self.fit(dataframe, label_class = self._label_class)
             importance_table = self._feature_importance
@@ -134,13 +134,13 @@ class ACME():
                 
         if self._task  == 'r' or self._task =='reg' or self._task =='regression': 
             local_table, out = _computeACME( model = self._model, dataframe = dataframe, features = self._features, 
-                numeric_df = self._quantitative_df, cat_df = self._qualitative_df, score_function = self._score_function,
+                numeric_df = self._numeric_df, cat_df = self._cat_df, score_function = self._score_function,
                 importance_table = self._feature_importance.sort_values('Importance', ascending = False), label = self._target,
                 task = self._task, local = local, K = self._K, local_table = local_table )
         
         if self._task  == 'c' or self._task =='class' or self._task =='classification':
             local_table, out =_computeACME( model = self._model, dataframe=dataframe, features = self._features, 
-                numeric_df = self._quantitative_df, cat_df = self._qualitative_df, score_function = self._score_function,
+                numeric_df = self._numeric_df, cat_df = self._cat_df, score_function = self._score_function,
                 importance_table = self._feature_importance.sort_values('Importance', ascending = False), label = self._target,
                 task = self._task, local = local, K = self._K, class_to_analyze = class_to_analyze, local_table = local_table )
             
