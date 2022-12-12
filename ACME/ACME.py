@@ -118,7 +118,7 @@ class ACME():
             else:
                 class_to_analyze = 0
                 label_class = class_map[class_to_analyze]
-                print( 'WARNING: in local interpretation, the label_class must be specified and not None. To default it\'s setted to class:' + str(class_map[0]) )
+                print('WARNING: in local interpretation, the label_class must be specified and not None. To default it\'s setted to class:' + str(class_map[0]))
             
         self._class_to_analyze = class_to_analyze
         self._label_class = label_class
@@ -225,7 +225,7 @@ class ACME():
         local_table = self._local_meta.drop(columns='size').copy()
         return _computeAnomalyDetectionImportance(local_table)      
 
-    def anomaly_detection_feature_exploration_plot(self, feature):
+    def anomaly_detection_feature_exploration_plot(self, feature, anomalies_direction = 'negative'):
         '''
         Generate a plot for local observation that, choosen a specific feature, shows how the anomaly score can change beacuse of the feature.
         
@@ -243,13 +243,17 @@ class ACME():
         actual_score = imp_table['mean_prediction'].values[0]
         actual_values = imp_table.loc[imp_table['quantile'] == imp_table['local_quantile'].values[0], 'original'].values[0]
         color = 'red' if actual_score > 0 else 'blue'
-
         fig = go.Figure()
-        fig.add_bar(x = imp_table.loc[imp_table.direction=='anomalies','effect'], y = imp_table.loc[imp_table.direction=='anomalies','original'].values, 
-        base =  imp_table['mean_prediction'].values[0], marker=dict(color = 'red'), name = 'Anomalies',orientation='h')
 
-        fig.add_bar(x = imp_table.loc[imp_table.direction=='normal','effect'], y = imp_table.loc[imp_table.direction=='normal','original'].values, 
-        base =  imp_table['mean_prediction'].values[0], marker=dict(color = 'blue'), name = 'Normal', orientation='h')
+        fig.add_bar(x = imp_table.loc[imp_table.direction=='anomalies','effect'], 
+                    y = imp_table.loc[imp_table.direction=='anomalies','original'].values, 
+                    base =  imp_table['mean_prediction'].values[0], 
+                    marker=dict(color = 'red'), name = 'Anomalies',orientation='h')
+
+        fig.add_bar(x = imp_table.loc[imp_table.direction=='normal','effect'], 
+                    y = imp_table.loc[imp_table.direction=='normal','original'].values, 
+                    base =  imp_table['mean_prediction'].values[0],
+                    marker=dict(color = 'blue'), name = 'Normal', orientation='h')
 
         fig.add_scatter( y = [ imp_table['original'].values[0]*0.9 ,imp_table['original'].values[-1]*1.05 ],
                         x = [ actual_score,actual_score ], mode='lines',
@@ -258,7 +262,6 @@ class ACME():
         fig.add_scatter( y = [ imp_table['original'].values[0]*0.9 ,imp_table['original'].values[-1]*1.05 ],
                         x = [ 0,0 ], mode='lines',
                         line=dict(color="black",width=2),  name = 'change point')
-
 
         fig.add_scatter( x = [ actual_score ],
                         y = [ actual_values], mode='markers',

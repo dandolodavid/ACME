@@ -186,7 +186,7 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
                 except:
                     predictions = model.predict_proba(Z.drop(columns='quantile')[features])[class_to_analyze]
                     
-             #build the dataframe with the standardize_effect, the predictions and the original 
+            #build the dataframe with the standardize_effect, the predictions and the original 
 
             local_value = dataframe.loc[local][feature]
 
@@ -223,45 +223,68 @@ def _build_anomaly_detection_feature_importance_table(local_table, feature):
     '''
     imp_table = local_table.loc[feature]   
     imp_table['direction'] = 'normal'
-    imp_table.loc[imp_table.predictions > 0,'direction'] = 'anomalies'
-    imp_table['effect'] = np.abs(imp_table['predictions'] - imp_table['mean_prediction'] )*np.sign(imp_table['predictions'])
+    imp_table.loc[imp_table['predictions'] > 0,'direction'] = 'anomalies'
+    imp_table['effect'] = np.abs(imp_table['mean_prediction'] - imp_table['predictions']) * np.sign(-2*(imp_table['mean_prediction']>imp_table['predictions']).astype(int)+1)
 
     return imp_table
 
 def _computeAnomalyDetectionImportance(local_table):
     '''
     '''
-    change_anomalies = {}
-    no_change_anomalies = {}
-    
-    importance_change = {}
-    importance_no_change = {}
+
+    importance = {}
+    weights = {'ratio':0.2,
+    'distance':0.2,
+    'change':0.3,
+    'delta':0.3}
 
     for feature in local_table.index.unique():
         
-        min_pred = local_table.loc[feature,'predictions'].min()
-        max_pred = local_table.loc[feature,'predictions'].max()
+        importance[feature] = {}
 
-        if np.sign(min_pred) !=  np.sign(max_pred):
-            change_anomalies[feature] = [min_pred,max_pred]
-            importance_change[feature] = max_pred-min_pred
+        tmp = local_table.loc[feature]
+
+        # search when the sign changes
+        tmp['sign_change'] = (np.sign(tmp['mean_prediction']) != np.sign(tmp['predictions'])).astype(int)
+        tmp = tmp.reset_index(drop=True)
+
+        tmp['quantile_distance'] = np.abs(tmp['quantile']-tmp['local_quantile'])
+
+        local_score = tmp['mean_prediction'].values[0]
+
+        min_score = min(tmp['predictions'].min(),local_score)
+        max_score = max(tmp['predictions'].max(),local_score)
+
+        #delta of the score
+        delta = np.abs( max_score - min_score )
+
+        #ratio 
+        ratio = (local_score - min_score)/( max_score - min_score)
+        
+        # change
+        if np.sign(min_score) !=  np.sign(max_score):
+            change=1
         else:
-            no_change_anomalies[feature] = [min_pred,max_pred]
-            if np.sign(max_pred) == 1: #if anomalous
-                np.abs(0 - max_pred) #the score must be higher if the feature can push to a more anomalous state the feature
-            if np.sign(min_pred) == -1:
-                np.abs(0 - min_pred)
+            change=0
+        
+        # number of quantile required to change the state 
+        if change == 1:
+            distance = tmp.loc[tmp['sign_change']==1,'quantile_distance'].min() 
+        else:
+            distance = 0
 
-            importance_no_change = np.abs(max_pred)
+        importance[feature]['ratio'] = ratio
+        importance[feature]['delta'] = delta
+        importance[feature]['change'] = change
+        importance[feature]['distance_to_change'] = distance
+        importance[feature]['max_score'] = max_score
+        importance[feature]['min_score'] = min_score
+        importance[feature]['local_score'] = local_score
+       
     
-    importance_change_df = pd.concat([
-                pd.DataFrame(importance_change,index=['AD importance score']).T,
-                pd.DataFrame(change_anomalies,index=['Min','Max']).T]
-                ,axis=1).sort_values('AD importance score',ascending=False)
-    
-    #importance_no_change = pd.concat([
-    #            pd.DataFrame(importance_no_change,index=['AD importance score']).T,
-    #            pd.DataFrame(no_change_anomalies,index=['Min','Max']).T]
-    #            ,axis=1).sort_values('AD importance score',ascending=False)
+    importance_df = pd.DataFrame.from_records(importance).T
+    importance_df['importance'] = importance_df['delta'] * weights['delta'] + importance_df['ratio'] * weights['ratio'] + importance_df['change'] * weights['change'] + importance_df['distance_to_change'] * weights['distance']
 
-    return importance_change_df
+
+    return importance_df
+    

@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from scipy import stats
 from collections import Counter 
 
 def most_frequent(List): 
@@ -17,6 +18,11 @@ def create_quantile_feature_matrix(dataframe, feature, K, robust = False, local 
     '''
     Create a matrix with K row, made by all the columns dataframe mean values, except for the "feature", which is replaced by K quantiles of the feature empiracal distribution
     '''
+    if local is None:
+        x_mean = dataframe.mean()
+    else:
+        x_mean = dataframe.loc[local]
+
     if robust:
         min_q = 0.05
         max_q = 0.95
@@ -25,20 +31,20 @@ def create_quantile_feature_matrix(dataframe, feature, K, robust = False, local 
         max_q = 1
     
     if K > 2:
-        quantile = np.linspace(min_q,max_q,K)
+        quantile = np.linspace(min_q,max_q,K-1)
     if K == 2:
         quantile = [ min_q, max_q ]
+    
+    quantile = np.sort(list(quantile) + [stats.percentileofscore(dataframe[feature],x_mean[feature])/100])
+
     x_j = dataframe[feature].values
     x_j_k = np.quantile(x_j,quantile)
-    if local is None:
-        x_mean = dataframe.mean()
-    else:
-        x_mean = dataframe.loc[local]
+    
     Z = pd.DataFrame( x_mean ).T
     Z = pd.concat([Z]*len(x_j_k), ignore_index=True)
     Z[feature] = x_j_k
     Z['quantile'] = quantile
-    
+   
     return Z
 
 def create_level_variable_matrix(dataframe, feature, local=None):
