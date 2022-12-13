@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 from collections import Counter 
+import plotly.express as px
 
 def most_frequent(List): 
     occurence_count = Counter(List) 
@@ -16,7 +17,24 @@ def clean_list(List,to_keep):
 
 def create_quantile_feature_matrix(dataframe, feature, K, robust = False, local = None):
     '''
-    Create a matrix with K row, made by all the columns dataframe mean values, except for the "feature", which is replaced by K quantiles of the feature empiracal distribution
+    Create a matrix with K row, made by all the columns dataframe mean values, except for the "feature", which is replaced by K quantiles of the feature empiracal distribution.
+
+    Params:
+    ------
+    - dataframe : pd.DataFrame
+        input dataframe
+    - feature : str
+        name of the feature
+    - K : int
+        number of quantile to use
+    - robust : bool
+        if True then use only quantile from 0.05 to 0.95, if false use quantile from 0 to 1
+    - local : int,str (default = None)
+        if valorized the use a single observation instead of the mean as baseline
+
+    Returns:
+    -------
+    - Z : pd.DataFrame
     '''
     if local is None:
         x_mean = dataframe.mean()
@@ -48,6 +66,20 @@ def create_quantile_feature_matrix(dataframe, feature, K, robust = False, local 
     return Z
 
 def create_level_variable_matrix(dataframe, feature, local=None):
+    '''
+    Params:
+    -------
+    - dataframe : pd.DataFrame
+        input dataframe
+    - feaure : str
+        feature name
+    - local : int,str
+        index of the local observation
+
+    Returns:
+    -------
+    - Z : pd.DataFrame
+    '''
     
     x_j_k = np.unique(dataframe[feature].to_list())
     if local is None:
@@ -62,14 +94,23 @@ def create_level_variable_matrix(dataframe, feature, local=None):
     
     return Z
 
-def calculate_quantile_position(dataframe,column,local):
-
-    from statsmodels.distributions.empirical_distribution import ECDF
-
-    ecdf = ECDF(dataframe[column])
-    return ecdf(dataframe.loc[local,column])    
-
 def nearest_quantile(dataframe, local_value, cat_features):
+    '''
+    Find the local values nearest quantile in the importance table.
+
+    Params:
+    ------
+    - dataframe : pd.DataFrame
+        input dataframe
+    - local_value : int,str
+        local value
+    - cat_features : bool
+        True if the feature is a categorical features
+    
+    Returns:
+    -------
+    - quantile values : float
+    '''
 
     original_list = dataframe['original'].unique()
     if cat_features:
@@ -80,7 +121,29 @@ def nearest_quantile(dataframe, local_value, cat_features):
     return quantile.values[0]
 
 def plot_express(plot_df, meta):
-    import plotly.express as px
+    '''
+    Function generating the plot
+
+    Params:
+    -------
+    - plot_df : pd.DataFrame
+        plot dataframe
+    - meta : dict
+        metadata with information required for the plot 
+        * x : 
+        * local : bool
+            if local or global
+        * task : str
+            ACME task
+        * base_line : 
+        * y_bottom : str
+            last feature's name of the plot
+        * y_top : sr
+            first feature's name of the plot
+
+    Returns:
+    -------
+    '''
     
     x = meta['x']
     
@@ -96,7 +159,7 @@ def plot_express(plot_df, meta):
         label_x = 'standardized effect'
         color_scale = ['royalblue','red']
         title = 'AcME Global Importance'
-        if meta['task'] == 'r' or meta['task'] == 'reg' or meta['task'] == 'regression':
+        if meta['task'] in ['r','reg','regression']:
             title = title + ' : regression ' 
         else:
             title = title + ' : classification. Label_class : ' + str(meta['label_class']) 
@@ -112,10 +175,21 @@ def plot_express(plot_df, meta):
             color_local = 'red'
         else:
             color_local = 'blue' 
-        fig.update_layout( shapes = [dict( type="line", x0 = x, y0 = y_bottom, x1 = x, y1 = y_top, line = dict(color = color_local , width = 2 ,dash = "dash" ) ),
-                                    #dict( type="line", x0 = meta['base_line'], y0 = y_bottom, x1 = meta['base_line'], y1 = y_top, line = dict(color="black", width=2 ,dash="dash" ) ) 
-                                    ] )
+        fig.update_layout( shapes = [dict(
+                                          type="line", x0 = x, y0 = y_bottom, x1 = x, y1 = y_top, 
+                                          line = dict(color = color_local , width = 2 ,dash = "dash" ) 
+                                         )
+                                    ])
     else:
         fig.update_layout(shapes=[dict( type="line", x0=x, y0=y_bottom, x1=x, y1=y_top, line = dict(color="black", width=2 ,dash="dash" ) )] )
     
     return fig
+
+
+
+#def calculate_quantile_position(dataframe,column,local):
+
+#    from statsmodels.distributions.empirical_distribution import ECDF
+
+#    ecdf = ECDF(dataframe[column])
+#    return ecdf(dataframe.loc[local,column])    

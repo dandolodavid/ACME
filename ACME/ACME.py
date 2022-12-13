@@ -20,12 +20,24 @@ class ACME():
         self._score_function = score_function
 
     def fit(self, dataframe, robust = False, label_class = None ):    
-    
-        #if cat features and numeric features are not specified then all the columns of the dataset (not the target) are used as numeric feature
+        '''
+        Fit the acme explainability.
+
+        Params:
+        ------
+        - dataframe : pd.DataFrame
+            input dataframe
+        - robust : bool (default False)
+            if True use only quantile from 0.05 and 0.95, if False use from 0 to 1
+        - label_class : str,int (default None)
+            if task is classification, specify the class of interest
+        '''
+
+        # if cat features and numeric features are not specified then all the columns of the dataset (not the target) are used as numeric feature
         if self._numeric_features == [] and self._cat_features == []:
             self._numeric_features = dataframe.drop(columns=self._target).columns.to_list()
 
-        #create the dataframe of numeric feature
+        # create the dataframe of numeric feature
         if self._numeric_features == []:
             if self._cat_features == [] :
                 self._numeric_features = dataframe.drop(columns= [self._target]).columns.to_list()
@@ -34,19 +46,19 @@ class ACME():
 
         self._numeric_df = dataframe[ self._numeric_features ].copy()
         
-        #create the dataframe for cat feature
+        # create the dataframe for cat feature
         self._cat_df = None
         if not self._cat_features == []:
            self._cat_df = dataframe[ self._cat_features ].copy()
 
-        #we save the features used by the model in the original order (necessary to correctly compute the predictiom)
+        # we save the features used by the model in the original order (necessary to correctly compute the predictiom)
         self._features = clean_list( dataframe.columns.to_list(), self._numeric_features + self._cat_features)
 
-        #if the task is the classification we must set the class to analyze 
-        #in input the name of the class is passed, so we create a procedure to map from the label to the class number in the probability matrix
-        if self._task  == 'c' or self._task =='class' or self._task =='classification':
+        # if the label class is given, find the corrispective position in the model class map
+        # else auto set as label class the first class
+        # N.B. : label_class is the class name, class_to_analyze is the label_class corrispective number in the model class map
+        if self._task  in ['c','class','classification']:
             class_map = np.array(self._model.classes_)
-
             if label_class is not None:
                 try:
                     class_to_analyze = np.where(class_map == label_class)[0][0]
@@ -58,57 +70,81 @@ class ACME():
             
             self._label_class = label_class
 
-        #create conteiners for acme results
-        out = pd.DataFrame(index= self._numeric_features  + self._cat_features )
+        # create conteiners for acme results
+        out = pd.DataFrame(index=self._numeric_features  + self._cat_features )
         out_table = pd.DataFrame()
 
-        #if regression
-        if self._task  == 'r' or self._task =='reg' or self._task =='regression':
+        # compute local acme for regression or classifiction  
+        if self._task in ['r','reg','regression']: 
             out_table, out, mean_pred = _computeACME( model = self._model, dataframe = dataframe, features = self._features,  
             numeric_df = self._numeric_df, cat_df = self._cat_df, importance_table = out, score_function = self._score_function,
             label = self._target, task = self._task, local = None, K = self._K, robust = robust, table = out_table )
 
-        #if classification
-        if self._task  == 'c' or self._task =='class' or self._task =='classification':
+        if self._task  in ['c','class','classification']:
             class_stack_importance = None
             if type(label_class) is list:
                 label_list = range(0,len(label_class))
             else:
                 label_list = [class_to_analyze]
             
-            for i in label_list:
+            # explore every label
+            for lab in label_list:
+            
                 out_table, out, mean_pred = _computeACME( model = self._model, dataframe = dataframe, features = self._features, 
                 numeric_df = self._numeric_df, cat_df = self._cat_df, importance_table = out, score_function = self._score_function,
-                label = self._target, task = self._task,local = None, K=self._K, class_to_analyze = i, table = out_table )
+                label = self._target, task = self._task,local = None, K=self._K, class_to_analyze = lab, table = out_table )
                 
+                # rename the columns in case of multilabel
                 if len(label_list) > 1:
-                    out.rename( columns = { 'Importance' : 'Importance_class_' + str(i) }, inplace=True )
+                    out.rename( columns = { 'Importance' : 'Importance_class_' + str(lab) }, inplace=True )
+                
+                # save the results
                 if class_stack_importance is None:
                     class_stack_importance = out
                 else:
                     class_stack_importance.merge( out, left_index=True, right_index=True )
             
+            #if multilabel sum the importance of each feature in each 
             if len(label_list) > 1:
                 class_stack_importance['Importance'] = class_stack_importance.sum(axis=1).values
 
-            #class_stack_importance.sort_values('Importance', ascending = False, inplace=True)
+            # class_stack_importance.sort_values('Importance', ascending = False, inplace=True)
             out = class_stack_importance
 
-        #define the output
+        # create the outputs
         self._meta = out_table
         self._feature_importance = out.sort_values('Importance', ascending = False)
         self._mean_pred = mean_pred
 
         return self
 
-    def fit_local(self, dataframe,local, robust = False, label_class = None):
+    def fit_local(self, dataframe, local, robust = False, label_class = None):
+        '''
+        Fit the local version of acme explainability.
 
+        Params:
+        ------
+        - dataframe : pd.DataFrame
+            input dataframe
+        - local : int,str
+            dataframe index of the desired row
+        - robust : bool (default False)
+            if True use only quantile from 0.05 and 0.95, if False use from 0 to 1
+        - label_class : str,int (default None)
+            if task is classification, specify the class of interest
+        '''
+
+        # initializing variables
         local_table = pd.DataFrame()
         class_to_analyze = None
 
+        # save the index of the local observation
         self._local = local
         
-        if self._task  == 'c' or self._task =='class' or self._task =='classification':
+        # if the label class is given, find the corrispective position in the model class map
+        # else auto set as label class the first class
+        # N.B. : label_class is the class name, class_to_analyze is the label_class corrispective number in the model class map
+        if self._task  in ['c','class','classification']:
             class_map = np.array(self._model.classes_)
             if label_class is not None:
                 try:
@@ -119,11 +155,13 @@ class ACME():
                 class_to_analyze = 0
                 label_class = class_map[class_to_analyze]
                 print('WARNING: in local interpretation, the label_class must be specified and not None. To default it\'s setted to class:' + str(class_map[0]))
-            
+
+        # save the class to analize and the label
         self._class_to_analyze = class_to_analyze
         self._label_class = label_class
 
-        #if the fitting procedure is not done, we frist compute the overall importance and create the numeric and cat dataframe
+        # if the fitting procedure is not done, we frist compute the overall importance and create the numeric and cat dataframe
+        # this is done to have the same ranking of the global score and common to all the local explaination
         if self._meta is None:
             self = self.fit(dataframe, label_class = self._label_class)
             importance_table = self._feature_importance
@@ -131,26 +169,42 @@ class ACME():
             if self._feature_importance.shape[1] > 1:
                 importance_table = self._feature_importance[ 'Importance_class_'+str(class_to_analyze)]
                 importance_table.columns=['Importance']
-                
-        if self._task  == 'r' or self._task =='reg' or self._task =='regression': 
+
+        # compute local acme for regression or classifiction     
+        if self._task in ['r','reg','regression']: 
             local_table, out = _computeACME( model = self._model, dataframe = dataframe, features = self._features, 
                 numeric_df = self._numeric_df, cat_df = self._cat_df, score_function = self._score_function,
                 importance_table = self._feature_importance.sort_values('Importance', ascending = False), label = self._target,
                 task = self._task, local = local, K = self._K, local_table = local_table )
         
-        if self._task  == 'c' or self._task =='class' or self._task =='classification':
+        if self._task in ['c','class','classification']:
             local_table, out =_computeACME( model = self._model, dataframe=dataframe, features = self._features, 
                 numeric_df = self._numeric_df, cat_df = self._cat_df, score_function = self._score_function,
                 importance_table = self._feature_importance.sort_values('Importance', ascending = False), label = self._target,
                 task = self._task, local = local, K = self._K, class_to_analyze = class_to_analyze, local_table = local_table )
-            
+        
+        # save the local table
         self._local_meta = local_table
 
         return self   
     
     def summary_plot(self, local = False):
+        '''
+        Generate the recap plot
 
-        if (self._task  == 'c' or self._task =='class' or self._task =='classification') and type(self._label_class) is list and not local:
+        Params: 
+        ------
+        local : bool
+            if local or global plot 
+        
+        Returns:
+        -------
+        - plotly figure
+        '''
+
+        # if desired explainability is global, task is classification and there are multi label: produce the bar plot
+        if self._task in ['c','class','classification'] and type(self._label_class) is list and not local:
+            # generate container
             plot_df = pd.DataFrame()
             i=0
             for label in self._label_class:
@@ -161,10 +215,12 @@ class ACME():
                 i=i+1
             
             fig = px.bar(plot_df.iloc[::-1].reset_index().rename(columns={'index':'Feature'}), x='Importance',y="Feature", color='class', orientation='h', title='Overall Classification Importance')
+
+        # generate the quantile/feature/effect plot
         else:       
             meta = dict()
             meta['task'] = self._task
-            if self._task  == 'c' or self._task =='class' or self._task =='classification':
+            if self._task  in ['c','class','classification']:
                 meta['label_class'] = self._label_class
             if local:
                 table = self._local_meta
@@ -177,33 +233,49 @@ class ACME():
 
             plot_df = pd.DataFrame()
             out = self._feature_importance.sort_values('Importance')
-            for idx in out.index:
-                prova = table.loc[idx].sort_values('original')
-                plot_df = pd.concat([plot_df,prova])
 
+            # for each feature we add the feature's table sorted to the plot dataframe
+            for idx in out.index:
+                tmp = table.loc[idx].sort_values('original')
+                plot_df = pd.concat([plot_df,tmp])
+
+            # prepare for the plotting
             plot_df.drop_duplicates(subset = ['effect','predictions','quantile'], keep ='first')
             plot_df.reset_index(inplace=True)
             plot_df.rename(columns={'index':'feature'}, inplace=True)
 
+            # if local set the refering x to the local values observation
+            # for the global set to 0
             if local:
                 meta['x'] = table['mean_prediction'].values[0]
             else: 
                 meta['x'] = 0
 
+            # set the top and the bottom of the y-axis (first and last feature)
             meta['y_bottom'] = plot_df['feature'].values[0]
             meta['y_top'] = plot_df['feature'].values[len(plot_df)-1]
 
+            # generate the plot
             fig = plot_express(plot_df, meta)
         
         return fig.update_layout( title={ 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top'})
 
     def bar_plot(self):
-        import plotly.express as px
-        if self._task == 'r' or self._task == 'reg' or self._task == 'regression':
+        '''
+        Feature importance plot
+
+        '''
+        
+        if self._task in ['r', 'reg', 'regression']:
             title = 'Barplot of feature importance: regression'
         else:
             title = 'Barplot of feature importance: classification'
-        fig = px.bar(self._feature_importance.reset_index().sort_values('Importance').rename(columns={'index':'Feature'}), x='Importance',y="Feature", orientation='h', title = title)
+
+        fig = px.bar(self._feature_importance.reset_index().sort_values('Importance').rename(columns={'index':'Feature'}), 
+                    x='Importance',
+                    y="Feature", 
+                    orientation='h', 
+                    title = title)
         
         return fig.update_layout( title={ 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top'})
 
@@ -218,26 +290,49 @@ class ACME():
 
     def anomaly_detection_importance(self):
         '''
-        Provides an ad hoc explaination for anomaly detection, studied for local interpretability
+        Provides ad hoc explaination for anomaly detection, studied for local interpretability
         The score will show what features can altered the prediction from normal to anomalies and viceversa.
         Please note that require to already called the local acme interpretability on a specific observation
         '''
+        
         local_table = self._local_meta.drop(columns='size').copy()
-        return _computeAnomalyDetectionImportance(local_table)      
+        importance_df = _computeAnomalyDetectionImportance(local_table)      
+
+        return importance_df
+
+    def anomaly_detection_feature_exploration_table(self, feature):
+        '''
+        Generate anomaly detection feature exploration
+
+        Params:
+        -------
+        - feature : str
+            selected feature's name 
+
+        Returns:
+        --------
+        - imp_table : pd.DataFrame
+        '''
+
+        local_table = self._local_meta.drop(columns='size').copy()
+        imp_table = _build_anomaly_detection_feature_importance_table(local_table, feature)
+        
+        return imp_table
 
     def anomaly_detection_feature_exploration_plot(self, feature, anomalies_direction = 'negative'):
         '''
         Generate a plot for local observation that, choosen a specific feature, shows how the anomaly score can change beacuse of the feature.
         
         Params:
-        ---------
+        -------
         - feature: str
             name of the feature to explore
         
         Return:
-        ---------
+        -------
         - plolty figure
         '''
+
         local_table = self._local_meta.drop(columns='size').copy()
         imp_table = _build_anomaly_detection_feature_importance_table(local_table, feature)
         actual_score = imp_table['mean_prediction'].values[0]
@@ -245,37 +340,37 @@ class ACME():
         color = 'red' if actual_score > 0 else 'blue'
         fig = go.Figure()
 
+        # add effects that pushes the score to anomaly state
         fig.add_bar(x = imp_table.loc[imp_table.direction=='anomalies','effect'], 
                     y = imp_table.loc[imp_table.direction=='anomalies','original'].values, 
                     base =  imp_table['mean_prediction'].values[0], 
                     marker=dict(color = 'red'), name = 'Anomalies',orientation='h')
 
+        # add effects that pushes the score to normal state
         fig.add_bar(x = imp_table.loc[imp_table.direction=='normal','effect'], 
                     y = imp_table.loc[imp_table.direction=='normal','original'].values, 
                     base =  imp_table['mean_prediction'].values[0],
                     marker=dict(color = 'blue'), name = 'Normal', orientation='h')
 
+        # add a line that marks the actual state
         fig.add_scatter( y = [ imp_table['original'].values[0]*0.9 ,imp_table['original'].values[-1]*1.05 ],
                         x = [ actual_score,actual_score ], mode='lines',
                         name = 'actual score', line=dict(color = color ,width=2,dash="dash") )
 
+        # add a line that marks the thresholds for state changing
         fig.add_scatter( y = [ imp_table['original'].values[0]*0.9 ,imp_table['original'].values[-1]*1.05 ],
                         x = [ 0,0 ], mode='lines',
                         line=dict(color="black",width=2),  name = 'change point')
 
+        # add a great point corrisponding to the the actual score
         fig.add_scatter( x = [ actual_score ],
                         y = [ actual_values], mode='markers',
                         marker=dict(size=20,color=color),  name = 'current value')
 
-        fig.update_layout(title='Feature ' + str(feature), 
-                        yaxis_title = "Feature values",
-                        xaxis_title = "Anomaly Score", autosize=True )
-
+        fig.update_layout(title="Feature " + str(feature), 
+                            yaxis_title = "Feature values", 
+                            xaxis_title = "Anomaly Score", 
+                            autosize=True )
+        
         return fig
     
-    def anomaly_detection_feature_exploration_table(self, feature):
-        '''
-        '''
-        local_table = self._local_meta.drop(columns='size').copy()
-        imp_table = _build_anomaly_detection_feature_importance_table(local_table, feature)
-        return imp_table

@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from ACME.utils import create_quantile_feature_matrix, create_level_variable_matrix, most_frequent, calculate_quantile_position, nearest_quantile
+from ACME.utils import create_quantile_feature_matrix, create_level_variable_matrix, most_frequent, nearest_quantile
 
 def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_table, label, task, local, K, robust = False, class_to_analyze = None, 
                 table = None, local_table = None, score_function = None ):
@@ -218,9 +218,16 @@ def _build_anomaly_detection_feature_importance_table(local_table, feature):
     '''
     Params:
     ---------
+    - local_table : pd.DataFrame
+        local table generate from _computeACME
     - feature: str
         name of the feature to explore
+
+    Returns:
+    --------
+    - imp_table : pd.DataFrame
     '''
+    # calculate the effect 
     imp_table = local_table.loc[feature]   
     imp_table['direction'] = 'normal'
     imp_table.loc[imp_table['predictions'] > 0,'direction'] = 'anomalies'
@@ -230,6 +237,16 @@ def _build_anomaly_detection_feature_importance_table(local_table, feature):
 
 def _computeAnomalyDetectionImportance(local_table):
     '''
+    Compute the anomaly detection importance.
+
+    Params:
+    -------
+    - local_table: pd.DataFrame
+        local table generate from _computeACME
+
+    Returns:
+    -------
+    - importance_df: pd.DataFrame
     '''
 
     importance = {}
@@ -238,6 +255,7 @@ def _computeAnomalyDetectionImportance(local_table):
     'change':0.3,
     'delta':0.3}
 
+    # for each specific feaure
     for feature in local_table.index.unique():
         
         importance[feature] = {}
@@ -247,11 +265,13 @@ def _computeAnomalyDetectionImportance(local_table):
         # search when the sign changes
         tmp['sign_change'] = (np.sign(tmp['mean_prediction']) != np.sign(tmp['predictions'])).astype(int)
         tmp = tmp.reset_index(drop=True)
-
+        # calculate quantile distance
         tmp['quantile_distance'] = np.abs(tmp['quantile']-tmp['local_quantile'])
 
+        # local actual score
         local_score = tmp['mean_prediction'].values[0]
 
+        # min and max score possible altering the current feature values
         min_score = min(tmp['predictions'].min(),local_score)
         max_score = max(tmp['predictions'].max(),local_score)
 
@@ -283,8 +303,11 @@ def _computeAnomalyDetectionImportance(local_table):
        
     
     importance_df = pd.DataFrame.from_records(importance).T
-    importance_df['importance'] = importance_df['delta'] * weights['delta'] + importance_df['ratio'] * weights['ratio'] + importance_df['change'] * weights['change'] + importance_df['distance_to_change'] * weights['distance']
 
+    # weighted linear combination of each store
+    importance_df['importance'] = importance_df['delta'] * weights['delta'] + importance_df['ratio'] * weights['ratio'] + importance_df['change'] * weights['change'] + importance_df['distance_to_change'] * weights['distance']
+    # sorting
+    importance_df = importance_df.sort_values('importance',ascending=False)
 
     return importance_df
     
