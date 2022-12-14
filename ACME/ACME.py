@@ -1,14 +1,17 @@
 import pandas as pd
 import numpy as np
 from ACME.utils import plot_express, clean_list
-from ACME.ACME_function import _computeACME, _build_anomaly_detection_feature_importance_table, _computeAnomalyDetectionImportance
+from ACME.ACME_function import computeACME
+from ACME.ACME_anomaly_detection import build_anomaly_detection_feature_importance_table, computeAnomalyDetectionImportance, build_anomaly_detection_explain_plot
 import plotly.express as px
 import plotly.graph_objects as go
 
 class ACME():
     
     def __init__(self, model, target, features = [], cat_features = [], K = 50, task = 'regression', score_function = None ):
-
+        '''
+        Initialization
+        '''
         self._model = model
         self._target = target
         self._features = features
@@ -16,15 +19,17 @@ class ACME():
         self._cat_features = cat_features
         self._task = task
         self._meta = None
+        self._local = None
         self._K = K
         self._score_function = score_function
+
 
     def fit(self, dataframe, robust = False, label_class = None ):    
         '''
         Fit the acme explainability.
 
         Params:
-        ------
+        -------
         - dataframe : pd.DataFrame
             input dataframe
         - robust : bool (default False)
@@ -76,7 +81,7 @@ class ACME():
 
         # compute local acme for regression or classifiction  
         if self._task in ['r','reg','regression']: 
-            out_table, out, mean_pred = _computeACME( model = self._model, dataframe = dataframe, features = self._features,  
+            out_table, out, mean_pred, baseline = computeACME( model = self._model, dataframe = dataframe, features = self._features,  
             numeric_df = self._numeric_df, cat_df = self._cat_df, importance_table = out, score_function = self._score_function,
             label = self._target, task = self._task, local = None, K = self._K, robust = robust, table = out_table )
 
@@ -90,7 +95,7 @@ class ACME():
             # explore every label
             for lab in label_list:
             
-                out_table, out, mean_pred = _computeACME( model = self._model, dataframe = dataframe, features = self._features, 
+                out_table, out, mean_pred, baseline = computeACME( model = self._model, dataframe = dataframe, features = self._features, 
                 numeric_df = self._numeric_df, cat_df = self._cat_df, importance_table = out, score_function = self._score_function,
                 label = self._target, task = self._task,local = None, K=self._K, class_to_analyze = lab, table = out_table )
                 
@@ -115,6 +120,7 @@ class ACME():
         self._meta = out_table
         self._feature_importance = out.sort_values('Importance', ascending = False)
         self._mean_pred = mean_pred
+        self._baseline = baseline
 
         return self
 
@@ -123,7 +129,7 @@ class ACME():
         Fit the local version of acme explainability.
 
         Params:
-        ------
+        -------
         - dataframe : pd.DataFrame
             input dataframe
         - local : int,str
@@ -172,19 +178,20 @@ class ACME():
 
         # compute local acme for regression or classifiction     
         if self._task in ['r','reg','regression']: 
-            local_table, out = _computeACME( model = self._model, dataframe = dataframe, features = self._features, 
+            local_table, out, baseline = computeACME( model = self._model, dataframe = dataframe, features = self._features, 
                 numeric_df = self._numeric_df, cat_df = self._cat_df, score_function = self._score_function,
                 importance_table = self._feature_importance.sort_values('Importance', ascending = False), label = self._target,
                 task = self._task, local = local, K = self._K, local_table = local_table )
         
         if self._task in ['c','class','classification']:
-            local_table, out =_computeACME( model = self._model, dataframe=dataframe, features = self._features, 
+            local_table, out, baseline = computeACME( model = self._model, dataframe=dataframe, features = self._features, 
                 numeric_df = self._numeric_df, cat_df = self._cat_df, score_function = self._score_function,
                 importance_table = self._feature_importance.sort_values('Importance', ascending = False), label = self._target,
                 task = self._task, local = local, K = self._K, class_to_analyze = class_to_analyze, local_table = local_table )
         
         # save the local table
         self._local_meta = local_table
+        self._baseline = baseline
 
         return self   
     
@@ -193,12 +200,12 @@ class ACME():
         Generate the recap plot
 
         Params: 
-        ------
+        -------
         local : bool
             if local or global plot 
         
         Returns:
-        -------
+        --------
         - plotly figure
         '''
 
@@ -263,9 +270,7 @@ class ACME():
     def bar_plot(self):
         '''
         Feature importance plot
-
         '''
-        
         if self._task in ['r', 'reg', 'regression']:
             title = 'Barplot of feature importance: regression'
         else:
@@ -296,7 +301,7 @@ class ACME():
         '''
         
         local_table = self._local_meta.drop(columns='size').copy()
-        importance_df = _computeAnomalyDetectionImportance(local_table)      
+        importance_df = computeAnomalyDetectionImportance(local_table)      
 
         return importance_df
 
@@ -315,7 +320,7 @@ class ACME():
         '''
 
         local_table = self._local_meta.drop(columns='size').copy()
-        imp_table = _build_anomaly_detection_feature_importance_table(local_table, feature)
+        imp_table = build_anomaly_detection_feature_importance_table(local_table, feature)
         
         return imp_table
 
@@ -333,44 +338,14 @@ class ACME():
         - plolty figure
         '''
 
-        local_table = self._local_meta.drop(columns='size').copy()
-        imp_table = _build_anomaly_detection_feature_importance_table(local_table, feature)
-        actual_score = imp_table['mean_prediction'].values[0]
-        actual_values = imp_table.loc[imp_table['quantile'] == imp_table['local_quantile'].values[0], 'original'].values[0]
-        color = 'red' if actual_score > 0 else 'blue'
-        fig = go.Figure()
-
-        # add effects that pushes the score to anomaly state
-        fig.add_bar(x = imp_table.loc[imp_table.direction=='anomalies','effect'], 
-                    y = imp_table.loc[imp_table.direction=='anomalies','original'].values, 
-                    base =  imp_table['mean_prediction'].values[0], 
-                    marker=dict(color = 'red'), name = 'Anomalies',orientation='h')
-
-        # add effects that pushes the score to normal state
-        fig.add_bar(x = imp_table.loc[imp_table.direction=='normal','effect'], 
-                    y = imp_table.loc[imp_table.direction=='normal','original'].values, 
-                    base =  imp_table['mean_prediction'].values[0],
-                    marker=dict(color = 'blue'), name = 'Normal', orientation='h')
-
-        # add a line that marks the actual state
-        fig.add_scatter( y = [ imp_table['original'].values[0]*0.9 ,imp_table['original'].values[-1]*1.05 ],
-                        x = [ actual_score,actual_score ], mode='lines',
-                        name = 'actual score', line=dict(color = color ,width=2,dash="dash") )
-
-        # add a line that marks the thresholds for state changing
-        fig.add_scatter( y = [ imp_table['original'].values[0]*0.9 ,imp_table['original'].values[-1]*1.05 ],
-                        x = [ 0,0 ], mode='lines',
-                        line=dict(color="black",width=2),  name = 'change point')
-
-        # add a great point corrisponding to the the actual score
-        fig.add_scatter( x = [ actual_score ],
-                        y = [ actual_values], mode='markers',
-                        marker=dict(size=20,color=color),  name = 'current value')
-
-        fig.update_layout(title="Feature " + str(feature), 
-                            yaxis_title = "Feature values", 
-                            xaxis_title = "Anomaly Score", 
-                            autosize=True )
-        
+        imp_table = self.anomaly_detection_feature_exploration_table(feature)
+        fig = build_anomaly_detection_explain_plot(imp_table, feature)
         return fig
     
+    def baseline_values(self):
+        '''
+        Extract the baseline vector used for AcME
+        '''
+        return self._baseline
+
+        return baseline

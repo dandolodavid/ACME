@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from ACME.utils import create_quantile_feature_matrix, create_level_variable_matrix, most_frequent, nearest_quantile
 
-def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_table, label, task, local, K, robust = False, class_to_analyze = None, 
+def computeACME(model, dataframe, features, numeric_df, cat_df, importance_table, label, task, local, K, robust = False, class_to_analyze = None, 
                 table = None, local_table = None, score_function = None ):
     '''
     Parameters:
@@ -64,8 +64,8 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
     
         if local is None:
             
-            #for every numeric feature, we compute the predictions based on the feature quantiles and create the variable-quantile matrix
-            #for every cat feature, we compute the predictions based on the feature levels and create the variable-levels matrix         
+            # for every numeric feature, we compute the predictions based on the feature quantiles and create the variable-quantile matrix
+            # for every cat feature, we compute the predictions based on the feature levels and create the variable-levels matrix         
             
             if feature in cat_features:
                 Z_numeric = pd.DataFrame( numeric_df.mean() ).T
@@ -82,28 +82,33 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
                 else:
                     Z = Z_numeric
 
+            # numeric features mean
             x_mean = pd.DataFrame( numeric_df.mean() ).T
-
+            
+            # cat features most frequent 
             if cat_features != []:
                 x_most_freq = pd.DataFrame( cat_df.apply( lambda x : most_frequent(x) )).T
                 x_mean = pd.concat( [x_mean,x_most_freq], axis = 1 )
+            
+            # save the baseline
+            baseline = x_mean[features]
 
             if score_function:
-                #if the score function is available
+                # if the score function is available
                 predictions = score_function( model, Z.drop(columns='quantile')[features] )
-                mean_pred = score_function( model, x_mean[features])[0]
+                mean_pred = score_function( model, baseline)[0]
                 
-            elif task  == 'r' or task =='reg' or task =='regression':
+            elif task in ['r','reg','regression']:
                 
-                #mean prediction
-                mean_pred = model.predict(x_mean[features])[0]
+                # mean prediction
+                mean_pred = model.predict(baseline)[0]
                 try:
                     if len(mean_pred) == 2:
                         mean_pred = mean_pred[0]
                 except:
                     pass
                 
-                #prediciton
+                # prediciton
                 predictions = model.predict(Z.drop(columns='quantile')[features])
                 try:
                     if predictions.shape[1] == 2:
@@ -111,17 +116,17 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
                 except:
                     pass
                 
-            elif task  == 'c' or task =='class' or task =='classification':
+            elif task  in ['c','class','classification']:
 
-                #mean prediction
-                mean_pred = model.predict_proba(x_mean[features])[0][class_to_analyze]
-                #prediciton
+                # mean prediction
+                mean_pred = model.predict_proba(baseline)[0][class_to_analyze]
+                # prediciton
                 try:
                     predictions = model.predict_proba(Z.drop(columns='quantile')[features])[:,class_to_analyze]
                 except:
                     predictions = model.predict_proba(Z.drop(columns='quantile')[features])[class_to_analyze]
 
-            #build the dataframe with the standardize_effect, the predictions and the original effects
+            # build the dataframe with the standardize_effect, the predictions and the original effects
             effects = predictions - mean_pred
             df['effect'] = ( effects - np.mean(effects) ) / np.sqrt( np.var(effects)+0.0001 ) * ( max(predictions) - min(predictions) )
             df['predictions'] = predictions
@@ -140,8 +145,8 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
 
             table = pd.concat([table, df])
 
-        else: #if local
-            #the procedure is the same but we must change the baseline and the scale of the effect (now the original prediction scale)
+        else: # if local
+            # the procedure is the same but we must change the baseline and the scale of the effect (now the original prediction scale)
             if feature in cat_features:
                 Z_numeric = pd.DataFrame(numeric_df.loc[local]).T
                 if cat_features != []:
@@ -158,7 +163,7 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
                     Z = Z_numeric
             
             if score_function:
-                #if the score function is available
+                # if the score function is available
                 if label in dataframe.columns.tolist():
                     x_local = pd.DataFrame(dataframe.drop(columns = [label]).loc[local]).T
                 else:
@@ -166,27 +171,27 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
                 predictions = score_function( model, Z.drop(columns='quantile')[features] )
                 local_pred = score_function( model, x_local[features].values)[0]
 
-            elif task == 'r' or task=='reg' or task=='regression':
-                #mean prediction
+            elif task in ['r','reg','regression']:
+                # mean prediction
                 if label in dataframe.columns.tolist():
                     x_local = pd.DataFrame(dataframe.drop(columns = [label]).loc[local]).T
                 else:
                     x_local = pd.DataFrame(dataframe).loc[local].T
                 local_pred = model.predict(x_local[features])[0]
-                #prediciton
+                # prediciton
                 predictions = model.predict(Z.drop(columns='quantile')[features])
                 
-            elif task == 'c' or task=='class' or task=='classification':
+            elif task in ['c','class','classification']:
 
-                #mean prediction
+                # mean prediction
                 local_pred = model.predict_proba( dataframe.drop(columns = label).loc[[local]] )[:,class_to_analyze][0] 
-                #prediciton
+                # prediciton
                 try:
                     predictions = model.predict_proba(Z.drop(columns='quantile')[features])[:,class_to_analyze]
                 except:
                     predictions = model.predict_proba(Z.drop(columns='quantile')[features])[class_to_analyze]
                     
-            #build the dataframe with the standardize_effect, the predictions and the original 
+            # build the dataframe with the standardize_effect, the predictions and the original 
 
             local_value = dataframe.loc[local][feature]
 
@@ -204,110 +209,13 @@ def _computeACME(model, dataframe, features, numeric_df, cat_df, importance_tabl
 
             local_df['local_quantile'] = near_quantile
             local_df.index = np.repeat(feature, len(predictions))
-            local_table = pd.concat([local_table, local_df])
+            local_table = pd.concat([local_table, local_df])          
         
     if local is None:            
-        return table, importance_table, mean_pred
+        return table, importance_table, mean_pred, baseline
     else:
-        return local_table, importance_table
+        # save the baseline
+        baseline = dataframe.loc[local][features].T
+        return local_table, importance_table, baseline
 
 
-##------------------------------------------------------------ ANOMALY DETECTION ------------------------------------------------------------
-
-def _build_anomaly_detection_feature_importance_table(local_table, feature):
-    '''
-    Params:
-    ---------
-    - local_table : pd.DataFrame
-        local table generate from _computeACME
-    - feature: str
-        name of the feature to explore
-
-    Returns:
-    --------
-    - imp_table : pd.DataFrame
-    '''
-    # calculate the effect 
-    imp_table = local_table.loc[feature]   
-    imp_table['direction'] = 'normal'
-    imp_table.loc[imp_table['predictions'] > 0,'direction'] = 'anomalies'
-    imp_table['effect'] = np.abs(imp_table['mean_prediction'] - imp_table['predictions']) * np.sign(-2*(imp_table['mean_prediction']>imp_table['predictions']).astype(int)+1)
-
-    return imp_table
-
-def _computeAnomalyDetectionImportance(local_table):
-    '''
-    Compute the anomaly detection importance.
-
-    Params:
-    -------
-    - local_table: pd.DataFrame
-        local table generate from _computeACME
-
-    Returns:
-    -------
-    - importance_df: pd.DataFrame
-    '''
-
-    importance = {}
-    weights = {'ratio':0.2,
-    'distance':0.2,
-    'change':0.3,
-    'delta':0.3}
-
-    # for each specific feaure
-    for feature in local_table.index.unique():
-        
-        importance[feature] = {}
-
-        tmp = local_table.loc[feature]
-
-        # search when the sign changes
-        tmp['sign_change'] = (np.sign(tmp['mean_prediction']) != np.sign(tmp['predictions'])).astype(int)
-        tmp = tmp.reset_index(drop=True)
-        # calculate quantile distance
-        tmp['quantile_distance'] = np.abs(tmp['quantile']-tmp['local_quantile'])
-
-        # local actual score
-        local_score = tmp['mean_prediction'].values[0]
-
-        # min and max score possible altering the current feature values
-        min_score = min(tmp['predictions'].min(),local_score)
-        max_score = max(tmp['predictions'].max(),local_score)
-
-        #delta of the score
-        delta = np.abs( max_score - min_score )
-
-        #ratio 
-        ratio = (local_score - min_score)/( max_score - min_score)
-        
-        # change
-        if np.sign(min_score) !=  np.sign(max_score):
-            change=1
-        else:
-            change=0
-        
-        # number of quantile required to change the state 
-        if change == 1:
-            distance = tmp.loc[tmp['sign_change']==1,'quantile_distance'].min() 
-        else:
-            distance = 0
-
-        importance[feature]['ratio'] = ratio
-        importance[feature]['delta'] = delta
-        importance[feature]['change'] = change
-        importance[feature]['distance_to_change'] = distance
-        importance[feature]['max_score'] = max_score
-        importance[feature]['min_score'] = min_score
-        importance[feature]['local_score'] = local_score
-       
-    
-    importance_df = pd.DataFrame.from_records(importance).T
-
-    # weighted linear combination of each store
-    importance_df['importance'] = importance_df['delta'] * weights['delta'] + importance_df['ratio'] * weights['ratio'] + importance_df['change'] * weights['change'] + importance_df['distance_to_change'] * weights['distance']
-    # sorting
-    importance_df = importance_df.sort_values('importance',ascending=False)
-
-    return importance_df
-    
