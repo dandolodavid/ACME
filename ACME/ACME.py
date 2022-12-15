@@ -1,8 +1,9 @@
 import pandas as pd
 import numpy as np
-from ACME.utils import plot_express, clean_list
-from ACME.ACME_function import computeACME
-from ACME.ACME_anomaly_detection import build_anomaly_detection_feature_importance_table, computeAnomalyDetectionImportance, build_anomaly_detection_explain_plot
+from ACME.utils import clean_list
+from ACME.ACME_function import computeACME, build_feature_exploration_table
+from ACME.ACME_plot import ACME_summary_plot, feature_exploration_plot
+from ACME.ACME_anomaly_detection import build_anomaly_detection_feature_exploration_table, computeAnomalyDetectionImportance
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -75,18 +76,16 @@ class ACME():
             
             self._label_class = label_class
 
-        # create conteiners for acme results
-        out = pd.DataFrame(index=self._numeric_features  + self._cat_features )
-        out_table = pd.DataFrame()
-
         # compute local acme for regression or classifiction  
-        if self._task in ['r','reg','regression']: 
-            out_table, out, mean_pred, baseline = computeACME( model = self._model, dataframe = dataframe, features = self._features,  
-            numeric_df = self._numeric_df, cat_df = self._cat_df, importance_table = out, score_function = self._score_function,
-            label = self._target, task = self._task, local = None, K = self._K, robust = robust, table = out_table )
-
+        if self._task in ['r','reg','regression'] or self._task in ['ad','anomaly detection']: 
+            feature_table, importance_table, baseline_pred, baseline = computeACME( model = self._model, dataframe = dataframe, task = self._task, 
+                                                                                features = self._features, label = self._target,  
+                                                                                numeric_df = self._numeric_df, cat_df = self._cat_df,
+                                                                                score_function = self._score_function,
+                                                                                local = None, K = self._K, robust = robust )
         if self._task  in ['c','class','classification']:
-            class_stack_importance = None
+            
+            class_stack_importance = []
             if type(label_class) is list:
                 label_list = range(0,len(label_class))
             else:
@@ -94,39 +93,38 @@ class ACME():
             
             # explore every label
             for lab in label_list:
-            
-                out_table, out, mean_pred, baseline = computeACME( model = self._model, dataframe = dataframe, features = self._features, 
-                numeric_df = self._numeric_df, cat_df = self._cat_df, importance_table = out, score_function = self._score_function,
-                label = self._target, task = self._task,local = None, K=self._K, class_to_analyze = lab, table = out_table )
+                feature_table, importance_table, baseline_pred, baseline = computeACME( model = self._model, dataframe = dataframe, task = self._task,
+                                                                                    features = self._features, label = self._target, class_to_analyze = lab,
+                                                                                    numeric_df = self._numeric_df, cat_df = self._cat_df,
+                                                                                    score_function = self._score_function, 
+                                                                                    local = None, K=self._K, robust = robust )
                 
                 # rename the columns in case of multilabel
                 if len(label_list) > 1:
-                    out.rename( columns = { 'Importance' : 'Importance_class_' + str(lab) }, inplace=True )
+                    importance_table.rename( columns = { 'importance' : 'Importance_class_' + str(label_class[lab]) }, inplace=True )
                 
                 # save the results
-                if class_stack_importance is None:
-                    class_stack_importance = out
-                else:
-                    class_stack_importance.merge( out, left_index=True, right_index=True )
-            
+                class_stack_importance.append(importance_table)
+
+            class_stack_importance = pd.concat(class_stack_importance,axis=1)
             #if multilabel sum the importance of each feature in each 
             if len(label_list) > 1:
-                class_stack_importance['Importance'] = class_stack_importance.sum(axis=1).values
+                class_stack_importance['importance'] = class_stack_importance.sum(axis=1).values
 
-            # class_stack_importance.sort_values('Importance', ascending = False, inplace=True)
-            out = class_stack_importance
+            class_stack_importance.sort_values('importance', ascending = False, inplace=True)
+            importance_table = class_stack_importance
 
         # create the outputs
-        self._meta = out_table
-        self._feature_importance = out.sort_values('Importance', ascending = False)
-        self._mean_pred = mean_pred
-        self._baseline = baseline
+        self._meta = feature_table.copy()
+        self._feature_importance = importance_table.sort_values('importance', ascending = False).copy()
+        self._baseline_pred = baseline_pred
+        self._global_baseline = baseline
 
         return self
 
     def fit_local(self, dataframe, local, robust = False, label_class = None):
         '''
-        Fit the local version of acme explainability.
+        Fit the local version of AcME explainability.
 
         Params:
         -------
@@ -139,10 +137,6 @@ class ACME():
         - label_class : str,int (default None)
             if task is classification, specify the class of interest
         '''
-
-        # initializing variables
-        local_table = pd.DataFrame()
-        class_to_analyze = None
 
         # save the index of the local observation
         self._local = local
@@ -162,46 +156,117 @@ class ACME():
                 label_class = class_map[class_to_analyze]
                 print('WARNING: in local interpretation, the label_class must be specified and not None. To default it\'s setted to class:' + str(class_map[0]))
 
-        # save the class to analize and the label
-        self._class_to_analyze = class_to_analyze
-        self._label_class = label_class
+            # save the class to analize and the label
+            self._class_to_analyze = class_to_analyze
+            self._label_class = label_class
 
-        # if the fitting procedure is not done, we frist compute the overall importance and create the numeric and cat dataframe
-        # this is done to have the same ranking of the global score and common to all the local explaination
-        if self._meta is None:
-            self = self.fit(dataframe, label_class = self._label_class)
-            importance_table = self._feature_importance
-        else:
-            if self._feature_importance.shape[1] > 1:
-                importance_table = self._feature_importance[ 'Importance_class_'+str(class_to_analyze)]
-                importance_table.columns=['Importance']
+            # if the fitting procedure is not done, we frist compute the overall importance and create the numeric and cat dataframe
+            # this is done to have the same ranking of the global score and common to all the local explaination
+            if self._meta is None:
+                self = self.fit(dataframe, label_class = self._label_class)
+                importance_table = self._feature_importance
+            else:
+                if self._feature_importance.shape[1] > 1:
+                    importance_table = self._feature_importance[ 'Importance_class_'+str(class_to_analyze) ]
+                    importance_table.columns = ['importance']
 
         # compute local acme for regression or classifiction     
-        if self._task in ['r','reg','regression']: 
-            local_table, out, baseline = computeACME( model = self._model, dataframe = dataframe, features = self._features, 
-                numeric_df = self._numeric_df, cat_df = self._cat_df, score_function = self._score_function,
-                importance_table = self._feature_importance.sort_values('Importance', ascending = False), label = self._target,
-                task = self._task, local = local, K = self._K, local_table = local_table )
+        if self._task in ['r','reg','regression'] or self._task in ['ad','anomaly detection']: 
+            local_table, out, baseline_pred, baseline = computeACME( model = self._model, dataframe = dataframe, task = self._task,
+                                                    features = self._features, label = self._target, 
+                                                    numeric_df = self._numeric_df, cat_df = self._cat_df, 
+                                                    score_function = self._score_function,
+                                                    local = local, K = self._K, robust = robust )
         
         if self._task in ['c','class','classification']:
-            local_table, out, baseline = computeACME( model = self._model, dataframe=dataframe, features = self._features, 
-                numeric_df = self._numeric_df, cat_df = self._cat_df, score_function = self._score_function,
-                importance_table = self._feature_importance.sort_values('Importance', ascending = False), label = self._target,
-                task = self._task, local = local, K = self._K, class_to_analyze = class_to_analyze, local_table = local_table )
-        
+            local_table, out, baseline_pred, baseline = computeACME( model = self._model, dataframe = dataframe, task = self._task,
+                                                    features = self._features, label = self._target, class_to_analyze = class_to_analyze,
+                                                    numeric_df = self._numeric_df, cat_df = self._cat_df, 
+                                                    score_function = self._score_function,
+                                                    local = local, K = self._K, robust = robust )
+
         # save the local table
         self._local_meta = local_table
-        self._baseline = baseline
+        self._local_baseline = baseline
 
         return self   
-    
+
+    def feature_importance(self, local = False):
+        '''
+        Returns the feature importance calculated by AcME.
+        In case of Anomaly Detection task, it provides ad hoc explaination for anomaly detection, studied for local interpretability.
+        The score will show what features can altered the prediction from normal to anomalies and viceversa.
+
+        Params:
+        ------
+        - local : bool  
+            if true and task is AD, it return the local AD version of feature importance
+
+        Return : 
+        -------
+        - pd.DataFrame
+        '''
+
+        # if the task is anomaly detection and we have already fitted a local acme 
+        # calculate the importance for the selected row anomaly detection task
+        if self._task in ['ad','anomaly detection'] and local:
+
+            local_table = self._local_meta.drop(columns='size').copy()
+            importance_df = computeAnomalyDetectionImportance(local_table)   
+            tmp = self._feature_importance
+            importance_df = pd.concat([importance_df,tmp],axis=1)   
+
+            return importance_df
+
+        # else simply return the importance calculated by acme
+        else:
+            return self._feature_importance
+
+
+    def feature_exploration(self, feature, local = False, plot = False):
+        '''
+        Generate anomaly detection feature exploration table or a plot for local observation that, 
+        choosen a specific feature, shows how the anomaly score can change beacuse of the feature.
+
+        Params:
+        -------
+        - feature : str
+            selected feature's name
+        - plot : bool
+            if true returns the plot, else returs the table
+
+        Returns:
+        --------
+        - feature_table : pd.DataFrame
+        '''
+
+        # extract the desired table
+        if local:
+            table = self._local_meta
+        else:
+            table = self._meta
+
+        # build the correct feature exploration table
+        if self._task in ['ad','anomaly detection']:
+            feature_table = build_anomaly_detection_feature_exploration_table(table, feature)
+        else:
+            feature_table = build_feature_exploration_table(table, feature)
+        
+        # if plot return plot, else return the table
+        if plot:
+            fig = feature_exploration_plot(feature_table, feature, self._task)
+            return fig
+        else:
+            return feature_table
+
+
     def summary_plot(self, local = False):
         '''
         Generate the recap plot
 
         Params: 
         -------
-        local : bool
+        - local : bool
             if local or global plot 
         
         Returns:
@@ -213,15 +278,16 @@ class ACME():
         if self._task in ['c','class','classification'] and type(self._label_class) is list and not local:
             # generate container
             plot_df = pd.DataFrame()
-            i=0
+            i = 0
             for label in self._label_class:
                 tmp = pd.DataFrame(self._feature_importance.iloc[:,i])
-                tmp.columns=['Importance']
+                tmp.columns = ['importance']
                 tmp['class'] = str(label)
-                plot_df=pd.concat([plot_df,tmp],axis=0)
+                plot_df = pd.concat([plot_df,tmp],axis=0)
                 i=i+1
             
-            fig = px.bar(plot_df.iloc[::-1].reset_index().rename(columns={'index':'Feature'}), x='Importance',y="Feature", color='class', orientation='h', title='Overall Classification Importance')
+            fig = px.bar(plot_df.iloc[::-1].reset_index().rename(columns={'index':'feature'}), x='importance',y='feature', 
+                        color='class', orientation='h', title='Overall Classification Importance')
 
         # generate the quantile/feature/effect plot
         else:       
@@ -233,13 +299,13 @@ class ACME():
                 table = self._local_meta
                 meta['local'] = True
                 meta['index'] = self._local 
-                meta['base_line'] = self._mean_pred
+                meta['base_line'] = self._baseline_pred
             else:
                 table = self._meta
                 meta['local'] = False
 
             plot_df = pd.DataFrame()
-            out = self._feature_importance.sort_values('Importance')
+            out = self._feature_importance.sort_values('importance')
 
             # for each feature we add the feature's table sorted to the plot dataframe
             for idx in out.index:
@@ -247,14 +313,14 @@ class ACME():
                 plot_df = pd.concat([plot_df,tmp])
 
             # prepare for the plotting
-            plot_df.drop_duplicates(subset = ['effect','predictions','quantile'], keep ='first')
+            plot_df.drop_duplicates(subset = ['effect','predict','quantile'], keep ='first')
             plot_df.reset_index(inplace=True)
             plot_df.rename(columns={'index':'feature'}, inplace=True)
 
             # if local set the refering x to the local values observation
             # for the global set to 0
             if local:
-                meta['x'] = table['mean_prediction'].values[0]
+                meta['x'] = table['baseline_prediction'].values[0]
             else: 
                 meta['x'] = 0
 
@@ -263,7 +329,7 @@ class ACME():
             meta['y_top'] = plot_df['feature'].values[len(plot_df)-1]
 
             # generate the plot
-            fig = plot_express(plot_df, meta)
+            fig = ACME_summary_plot(plot_df, meta)
         
         return fig.update_layout( title={ 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top'})
 
@@ -276,76 +342,28 @@ class ACME():
         else:
             title = 'Barplot of feature importance: classification'
 
-        fig = px.bar(self._feature_importance.reset_index().sort_values('Importance').rename(columns={'index':'Feature'}), 
-                    x='Importance',
-                    y="Feature", 
+        fig = px.bar(self._feature_importance.reset_index().sort_values('importance').rename(columns={'index':'feature'}), 
+                    x='importance',
+                    y='feature', 
                     orientation='h', 
                     title = title)
         
         return fig.update_layout( title={ 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top'})
-
-    def feature_importance(self):
-        return self._feature_importance
     
-    def summary_table(self):
-        return self._meta
-
-    def local_table(self):
-        return self._local_meta.drop(columns='size')
-
-    def anomaly_detection_importance(self):
+    def summary_table(self, local = False):
         '''
-        Provides ad hoc explaination for anomaly detection, studied for local interpretability
-        The score will show what features can altered the prediction from normal to anomalies and viceversa.
-        Please note that require to already called the local acme interpretability on a specific observation
+        Expose the global or local summary table
         '''
-        
-        local_table = self._local_meta.drop(columns='size').copy()
-        importance_df = computeAnomalyDetectionImportance(local_table)      
-
-        return importance_df
-
-    def anomaly_detection_feature_exploration_table(self, feature):
+        if local:
+            return self._local_meta.drop(columns='size')     
+        else: 
+            return self._meta.drop(columns='size')     
+            
+    def baseline_values(self,local=False):
         '''
-        Generate anomaly detection feature exploration
-
-        Params:
-        -------
-        - feature : str
-            selected feature's name 
-
-        Returns:
-        --------
-        - imp_table : pd.DataFrame
+        Expose the baseline vector used for AcME
         '''
-
-        local_table = self._local_meta.drop(columns='size').copy()
-        imp_table = build_anomaly_detection_feature_importance_table(local_table, feature)
-        
-        return imp_table
-
-    def anomaly_detection_feature_exploration_plot(self, feature, anomalies_direction = 'negative'):
-        '''
-        Generate a plot for local observation that, choosen a specific feature, shows how the anomaly score can change beacuse of the feature.
-        
-        Params:
-        -------
-        - feature: str
-            name of the feature to explore
-        
-        Return:
-        -------
-        - plolty figure
-        '''
-
-        imp_table = self.anomaly_detection_feature_exploration_table(feature)
-        fig = build_anomaly_detection_explain_plot(imp_table, feature)
-        return fig
-    
-    def baseline_values(self):
-        '''
-        Extract the baseline vector used for AcME
-        '''
-        return self._baseline
-
-        return baseline
+        if local:
+            return self._local_baseline
+        else:
+            return self._global_baseline
