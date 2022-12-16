@@ -310,18 +310,20 @@ def computeACME(model, dataframe, features, numeric_df, cat_df, label, task, loc
         near_quantile = nearest_quantile(features_df, baseline[feature].values[0], feature in cat_features)
         features_df['baseline_quantile'] = near_quantile
 
-        features_df['size'] = 0.2
-        features_df.loc[features_df['quantile'] == near_quantile,'size'] = 1.0
+        features_df['size'] = 0.1
+        features_df.loc[features_df['quantile'] == near_quantile,'size'] = 0.5
        
         features_df.index = np.repeat(feature, len(predictions))
         features_df.index.name = 'feature'
         table = pd.concat([table, features_df])
     
     # calculate importance and merge with the table
-    importance_table = table[['effect']].abs().reset_index().groupby('feature')[['effect']].mean().sort_values('effect',ascending=False).rename(columns={'effect':'importance'})
-    table = table.merge(importance_table, how = 'left', right_index=True, left_index=True)
+    if local:
+        importance_table = None
+    else:
+        importance_table = table[['effect']].abs().reset_index().groupby('feature')[['effect']].mean().sort_values('effect',ascending=False).rename(columns={'effect':'importance'})
+        table = table.merge(importance_table, how = 'left', right_index=True, left_index=True)
 
     #### TBD : at the moment, importance given in local interpretability and saved in local table is not the same obtained by global interpretability
-
     return table, importance_table, baseline_pred, baseline
 

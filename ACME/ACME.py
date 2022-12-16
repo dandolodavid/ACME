@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from ACME.utils import clean_list
 from ACME.ACME_function import computeACME, build_feature_exploration_table
-from ACME.ACME_plot import ACME_summary_plot, feature_exploration_plot
+from ACME.ACME_plot import ACME_summary_plot, feature_exploration_plot, ACME_barplot_multicalss
 from ACME.ACME_anomaly_detection import build_anomaly_detection_feature_exploration_table, computeAnomalyDetectionImportance
 import plotly.express as px
 import plotly.graph_objects as go
@@ -191,7 +191,7 @@ class ACME():
 
         return self   
 
-    def feature_importance(self, local = False):
+    def feature_importance(self, local=False):
         '''
         Returns the feature importance calculated by AcME.
         In case of Anomaly Detection task, it provides ad hoc explaination for anomaly detection, studied for local interpretability.
@@ -223,7 +223,7 @@ class ACME():
             return self._feature_importance
 
 
-    def feature_exploration(self, feature, local = False, plot = False):
+    def feature_exploration(self, feature, local=False, plot=False):
         '''
         Generate anomaly detection feature exploration table or a plot for local observation that, 
         choosen a specific feature, shows how the anomaly score can change beacuse of the feature.
@@ -260,7 +260,7 @@ class ACME():
             return feature_table
 
 
-    def summary_plot(self, local = False):
+    def summary_plot(self, local=False):
         '''
         Generate the recap plot
 
@@ -276,18 +276,7 @@ class ACME():
 
         # if desired explainability is global, task is classification and there are multi label: produce the bar plot
         if self._task in ['c','class','classification'] and type(self._label_class) is list and not local:
-            # generate container
-            plot_df = pd.DataFrame()
-            i = 0
-            for label in self._label_class:
-                tmp = pd.DataFrame(self._feature_importance.iloc[:,i])
-                tmp.columns = ['importance']
-                tmp['class'] = str(label)
-                plot_df = pd.concat([plot_df,tmp],axis=0)
-                i=i+1
-            
-            fig = px.bar(plot_df.iloc[::-1].reset_index().rename(columns={'index':'feature'}), x='importance',y='feature', 
-                        color='class', orientation='h', title='Overall Classification Importance')
+            fig = ACME_barplot_multicalss(self._feature_importance, self._label_class)
 
         # generate the quantile/feature/effect plot
         else:       
@@ -331,7 +320,7 @@ class ACME():
             # generate the plot
             fig = ACME_summary_plot(plot_df, meta)
         
-        return fig.update_layout( title={ 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top'})
+        return fig.update_layout( title={ 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top'} )
 
     def bar_plot(self):
         '''
@@ -342,15 +331,16 @@ class ACME():
         else:
             title = 'Barplot of feature importance: classification'
 
-        fig = px.bar(self._feature_importance.reset_index().sort_values('importance').rename(columns={'index':'feature'}), 
+        fig = px.bar(round(self._feature_importance.reset_index().sort_values('importance').rename(columns={'index':'feature'}),3), 
                     x='importance',
                     y='feature', 
                     orientation='h', 
                     title = title)
+        fig.update_traces(hovertemplate = 'Feature:<b>%{y}</b><br>Importance:%{x}')
         
-        return fig.update_layout( title={ 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top'})
+        return fig.update_layout( title={ 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top'} )
     
-    def summary_table(self, local = False):
+    def summary_table(self, local=False):
         '''
         Expose the global or local summary table
         '''
@@ -359,7 +349,7 @@ class ACME():
         else: 
             return self._meta.drop(columns='size')     
             
-    def baseline_values(self,local=False):
+    def baseline_values(self, local=False):
         '''
         Expose the baseline vector used for AcME
         '''

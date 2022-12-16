@@ -3,6 +3,29 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 
+def ACME_barplot_multicalss(importance_table, label_class):
+
+    # generate container
+    plot_df = pd.DataFrame()
+    i = 0
+    for label in label_class:
+        tmp = pd.DataFrame(importance_table.iloc[:,i])
+        tmp.columns = ['importance']
+        tmp['class'] = str(label)
+        plot_df = pd.concat([plot_df,tmp],axis=0)
+        i+=1
+    
+    fig = px.bar(round(plot_df.iloc[::-1].reset_index().rename(columns={'index':'feature'}),3), 
+                x='importance',y='feature', 
+                color='class', 
+                orientation='h', 
+                hover_name="class",
+                title='Overall Classification Importance')
+
+    fig.update_traces(hovertemplate = 'Feature:<b>%{y}</b><br><br>Importance: %{x}<br>Class: %{hovertext}')
+
+    return fig
+
 def ACME_summary_plot(plot_df, meta):
     '''
     Function generating the plot
@@ -27,47 +50,46 @@ def ACME_summary_plot(plot_df, meta):
     Returns:
     -------
     '''
-    
-    x = meta['x']
-    
-    if meta['local']:
-        label_x = 'predict'
-        color_scale = ['royalblue','red']
-        title = 'Local AcME: observation ID ' + str(meta['index']) + '. Predicted: ' + str(round(x,3))
-        if 'label_class' in meta.keys():
-            title = title + ' ( label_class : ' + str(meta['label_class']) + ' )'
-        fig = px.scatter(plot_df, x="effect", y='feature', color="quantile", size = 'size', hover_data=['original'],
-                        color_continuous_scale = color_scale,labels = {'effect':label_x,'feature':'feature'}, title = title)
-    else:
-        label_x = 'standardized effect'
-        color_scale = ['royalblue','red']
-        title = 'AcME Global Importance'
-        if meta['task'] in ['r','reg','regression'] or meta['task'] in ['ad','anomaly detection']:
-            title = title + ' : regression ' 
-        else:
-            title = title + ' : classification. Label_class : ' + str(meta['label_class']) 
-        fig = px.scatter(plot_df, x="effect", y='feature', color="quantile", hover_data=['original'],
-                       color_continuous_scale = color_scale,
-                       labels = {'effect':label_x,'feature':'feature'}, title = title)
+    color_scale =  ['royalblue','red']
+    label_x = 'Predict' if meta['local'] else 'Standardized effect'
+    title = 'Local AcME: observation ID ' + str(meta['index']) + '. Predicted: ' + str(round(meta['x'],3)) if meta['local'] else 'AcME Global Importance'
 
     y_bottom = meta['y_bottom']
     y_top = meta['y_top']
-    
+
     if meta['local']:
-        if x > meta['base_line']:
-            color_local = 'red'
-        else:
-            color_local = 'blue' 
-        fig.update_layout( shapes = [dict(
-                                          type="line", x0 = x, y0 = y_bottom, x1 = x, y1 = y_top, 
-                                          line = dict(color = color_local , width = 2 ,dash = "dash" ) 
-                                         )
-                                    ])
+        if 'label_class' in meta.keys():
+            title = title + ' ( label_class : ' + str(meta['label_class']) + ' )'
     else:
-        fig.update_layout(shapes=[dict( type="line", x0=x, y0=y_bottom, x1=x, y1=y_top, line = dict(color="black", width=2 ,dash="dash" ) )] )
+        if meta['task'] in ['r','reg','regression'] or meta['task'] in ['ad','anomaly detection']:
+            title = title + ' : regression ' 
+        else:
+            title = title + ' : classification. Label_class : ' + str(meta['label_class'])       
+
+    if meta['local']:
+        color_local = 'red' if meta['x'] > meta['base_line'] else 'blue' 
+    else:
+        color_local = 'black'
+    
+    fig = px.scatter(round(plot_df,3), 
+                        x = 'effect', y = 'feature', 
+                        color = 'quantile', size = 'size' if meta['local'] else None, 
+                        hover_data = ['original'],
+                        color_continuous_scale = color_scale,
+                        labels = {'effect':label_x.lower(),'feature':'feature'}, title = title)
+
+    fig.update_layout(shapes=[dict( 
+                                    type='line', 
+                                    x0 = meta['x'], y0 = y_bottom, 
+                                    x1 = meta['x'], y1 = y_top, 
+                                    line = dict(color = color_local, 
+                                                width = 2,
+                                                dash = 'dash')
+                                    )])
+
+    fig.update_traces(hovertemplate = 'Feature: <b>%{y}</b><br><br>' +  label_x + ': %{x}<br>Original value: %{customdata[0]}<br>Quantile: %{marker.color}')
     
     return fig
-
 
 
 def feature_exploration_plot(table, feature, task):
@@ -91,7 +113,7 @@ def feature_exploration_plot(table, feature, task):
 
     # generate figure
     fig = go.Figure()
-
+    table = round(table,3)
     # score and values of the baseline prediction (if local the baseline is the local observation)
     actual_score = table['baseline_prediction'].values[0]
     actual_values = table.loc[table['quantile'] == table['baseline_quantile'].values[0], 'original'].values[0]
@@ -116,23 +138,29 @@ def feature_exploration_plot(table, feature, task):
                 y = table.loc[table.direction ==  plot_meta['lower_trace']['value'],'original'].values, 
                 base = table['baseline_prediction'].values[0], 
                 marker = dict(color = 'blue'), 
+                hovertemplate = 'Prediction: %{x}<br>Feature value: %{y}',
                 name =  plot_meta['lower_trace']['name'], orientation='h')
 
     # add effects that pushes the score to normal state
     fig.add_bar(x = table.loc[table.direction == plot_meta['upper_trace']['value'],'effect'], 
                 y = table.loc[table.direction == plot_meta['upper_trace']['value'],'original'].values, 
                 base = table['baseline_prediction'].values[0],
-                marker = dict(color = 'red'), 
+                marker = dict(color = 'red'),
+                hovertemplate = 'Prediction: %{x}<br>Feature value: %{y}',
                 name =  plot_meta['upper_trace']['name'], orientation='h')
 
     # add a line that marks the actual state
     fig.add_scatter(y = [ table['original'].values[0]*0.9 ,table['original'].values[-1]*1.05 ],
-                    x = [ actual_score,actual_score ], mode ='lines',
+                    x = [ actual_score,actual_score ], 
+                    mode ='lines', 
+                    hovertemplate = 'Actual '+ 'score' if task in ['ad','anomaly detection'] else 'prediction',
                     name = 'actual score', line = dict(color = color ,width=2,dash="dash") )
 
     # add a great point corrisponding to the the actual score
     fig.add_scatter( x = [actual_score],
                     y = [actual_values], mode='markers',
+                    
+                    hovertemplate = 'Actual feature value<br> '+ 'Prediction: %{x}<br>Value: %{y}',
                     marker = dict(size=20,color=color),  name = 'current value')
     
     # add a line that marks the thresholds for state changing
@@ -140,6 +168,8 @@ def feature_exploration_plot(table, feature, task):
         fig.add_scatter( y = [ table['original'].values[0]*0.9, table['original'].values[-1]*1.05 ],
                          x = [ 0,0 ], 
                          mode='lines',
+                         
+                         hovertemplate = 'Changepoint',
                          line=dict(color="black",width=2),  name = 'change point')
 
     fig.update_layout(  title='Feature ' + str(feature), 
