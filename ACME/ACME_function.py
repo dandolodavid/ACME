@@ -310,8 +310,8 @@ def computeACME(model, dataframe, features, numeric_df, cat_df, label, task, loc
         near_quantile = nearest_quantile(features_df, baseline[feature].values[0], feature in cat_features)
         features_df['baseline_quantile'] = near_quantile
 
-        features_df['size'] = 0.1
-        features_df.loc[features_df['quantile'] == near_quantile,'size'] = 0.5
+        features_df['size'] = 0.1 if local else 0.05
+        features_df.loc[features_df['quantile'] == near_quantile,'size'] = 0.5 if local else 0.05
        
         features_df.index = np.repeat(feature, len(predictions))
         features_df.index.name = 'feature'

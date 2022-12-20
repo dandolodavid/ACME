@@ -9,9 +9,23 @@ import plotly.graph_objects as go
 
 class ACME():
     
-    def __init__(self, model, target, features = [], cat_features = [], K = 50, task = 'regression', score_function = None ):
+    def __init__(self, model, target, features=[], cat_features=[], K=50, task='regression', score_function=None, weights={} ):
         '''
         Initialization
+        Params:
+        ------
+
+         - weights : dict 
+            Dictionary with the importance fo each element. Sum must be 1
+            * ratio : float
+                importance of local score position 
+            * distance : float
+                importance of interquanitle distance necessary to change 
+            * change : float
+                importance of the possibility to change prediction
+            * delta : float
+                importance of the score delta
+
         '''
         self._model = model
         self._target = target
@@ -25,7 +39,7 @@ class ACME():
         self._score_function = score_function
 
 
-    def fit(self, dataframe, robust = False, label_class = None ):    
+    def fit(self, dataframe, robust = False, label_class = None):    
         '''
         Fit the acme explainability.
 
@@ -120,6 +134,9 @@ class ACME():
         self._baseline_pred = baseline_pred
         self._global_baseline = baseline
 
+        if self._task in ['ad','anomaly detection']: 
+            self._feature_importance() 
+
         return self
 
     def fit_local(self, dataframe, local, robust = False, label_class = None):
@@ -163,7 +180,7 @@ class ACME():
             # if the fitting procedure is not done, we frist compute the overall importance and create the numeric and cat dataframe
             # this is done to have the same ranking of the global score and common to all the local explaination
             if self._meta is None:
-                self = self.fit(dataframe, label_class = self._label_class)
+                self = self.fit(dataframe, label_class=self._label_class, weights=self._ad_weights)
                 importance_table = self._feature_importance
             else:
                 if self._feature_importance.shape[1] > 1:
@@ -191,7 +208,7 @@ class ACME():
 
         return self   
 
-    def feature_importance(self, local=False):
+    def feature_importance(self, local=False, weights = {}):
         '''
         Returns the feature importance calculated by AcME.
         In case of Anomaly Detection task, it provides ad hoc explaination for anomaly detection, studied for local interpretability.
@@ -212,10 +229,8 @@ class ACME():
         if self._task in ['ad','anomaly detection'] and local:
 
             local_table = self._local_meta.drop(columns='size').copy()
-            importance_df = computeAnomalyDetectionImportance(local_table)   
-            tmp = self._feature_importance
-            importance_df = pd.concat([importance_df,tmp],axis=1)   
-
+            importance_df = computeAnomalyDetectionImportance(local_table, weights = weights)   
+        
             return importance_df
 
         # else simply return the importance calculated by acme
@@ -288,7 +303,7 @@ class ACME():
                 table = self._local_meta
                 meta['local'] = True
                 meta['index'] = self._local 
-                meta['base_line'] = self._baseline_pred
+                meta['baseline'] = self._baseline_pred
             else:
                 table = self._meta
                 meta['local'] = False
@@ -320,7 +335,7 @@ class ACME():
             # generate the plot
             fig = ACME_summary_plot(plot_df, meta)
         
-        return fig.update_layout( title={ 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top'} )
+        return fig
 
     def bar_plot(self):
         '''

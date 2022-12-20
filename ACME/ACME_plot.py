@@ -41,7 +41,7 @@ def ACME_summary_plot(plot_df, meta):
             if local or global
         * task : str
             ACME task
-        * base_line : 
+        * baseline : 
         * y_bottom : str
             last feature's name of the plot
         * y_top : sr
@@ -50,13 +50,15 @@ def ACME_summary_plot(plot_df, meta):
     Returns:
     -------
     '''
-    color_scale =  ['royalblue','red']
+    color_scale =  ['midnightblue','lightskyblue','limegreen']
     label_x = 'Predict' if meta['local'] else 'Standardized effect'
     title = 'Local AcME: observation ID ' + str(meta['index']) + '. Predicted: ' + str(round(meta['x'],3)) if meta['local'] else 'AcME Global Importance'
 
+    # set the bottom and the top of the plot
     y_bottom = meta['y_bottom']
     y_top = meta['y_top']
 
+    # set title
     if meta['local']:
         if 'label_class' in meta.keys():
             title = title + ' ( label_class : ' + str(meta['label_class']) + ' )'
@@ -66,11 +68,13 @@ def ACME_summary_plot(plot_df, meta):
         else:
             title = title + ' : classification. Label_class : ' + str(meta['label_class'])       
 
-    if meta['local']:
-        color_local = 'red' if meta['x'] > meta['base_line'] else 'blue' 
+    #set the color for the local score line
+    if (meta['local'] is not None) and (meta['task'] in ['ad','anomaly detection']):
+        color_local = 'red' if meta['x'] > 0 else 'blue' 
     else:
         color_local = 'black'
     
+    # draw plot
     fig = px.scatter(round(plot_df,3), 
                         x = 'effect', y = 'feature', 
                         color = 'quantile', size = 'size' if meta['local'] else None, 
@@ -78,18 +82,32 @@ def ACME_summary_plot(plot_df, meta):
                         color_continuous_scale = color_scale,
                         labels = {'effect':label_x.lower(),'feature':'feature'}, title = title)
 
-    fig.update_layout(shapes=[dict( 
+    # add local score line
+    shapes = [dict( 
+                    type='line', 
+                    x0 = meta['x'], y0 = y_bottom, 
+                    x1 = meta['x'], y1 = y_top, 
+                    line = dict(color = color_local, 
+                                width = 2,
+                                dash = 'dash')
+                    )]
+    # if anomaly detection add a line that marks the thresholds for state changing
+    if meta['task'] in meta['task'] in ['ad','anomaly detection']:
+        shapes = shapes + [dict( 
                                     type='line', 
-                                    x0 = meta['x'], y0 = y_bottom, 
-                                    x1 = meta['x'], y1 = y_top, 
-                                    line = dict(color = color_local, 
+                                    x0 = 0, y0 = y_bottom, 
+                                    x1 = 0, y1 = y_top, 
+                                    line = dict(color = 'black', 
                                                 width = 2,
-                                                dash = 'dash')
-                                    )])
+                                                dash = 'solid')
+                                    )]
 
-    fig.update_traces(hovertemplate = 'Feature: <b>%{y}</b><br><br>' +  label_x + ': %{x}<br>Original value: %{customdata[0]}<br>Quantile: %{marker.color}')
+    fig.update_layout(shapes=shapes)
     
-    return fig
+    # set hover template
+    fig.update_traces(hovertemplate = 'Feature: <b>%{y}</b><br><br>' +  label_x + ': %{x}<br>Original value: %{customdata[0]}<br>Quantile: %{marker.color}')
+
+    return fig.update_layout( title={ 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top'} )
 
 
 def feature_exploration_plot(table, feature, task):
@@ -99,7 +117,7 @@ def feature_exploration_plot(table, feature, task):
     Params:
     ------
     - table : pd.DataFrame
-        ° regressiona nd classification : summary/local table 
+        ° regression and classification : summary/local table 
         ° anomaly detection : importance table generated from the "build_anomaly_detection_feature_exploration_table" function for task 
     - feature : str
         name of the feature
