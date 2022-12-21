@@ -159,8 +159,6 @@ def computeACME(model, dataframe, features, numeric_df, cat_df, label, task, loc
         if uses the range [0.05, 0.95] for the quantiles instead fo [0,1]
     - class_to_analyze: int, str (default None)
         class to analyze in case of classification. If None the entire classification system is analyzed. Must be specified in case of local AcME
-    - score_function: function
-        function used to compute the predictions
     - score_function: fun(model, x)
         a function that has in input the model and the input data to realize the prediction. It must return a numeric score
 

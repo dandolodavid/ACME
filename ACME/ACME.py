@@ -9,24 +9,29 @@ import plotly.graph_objects as go
 
 class ACME():
     
-    def __init__(self, model, target, features=[], cat_features=[], K=50, task='regression', score_function=None, weights={} ):
+    def __init__(self, model, target, features=[], cat_features=[], K=50, task='regression', score_function=None):
         '''
         Initialization
+        
         Params:
         ------
-
-         - weights : dict 
-            Dictionary with the importance fo each element. Sum must be 1
-            * ratio : float
-                importance of local score position 
-            * distance : float
-                importance of interquanitle distance necessary to change 
-            * change : float
-                importance of the possibility to change prediction
-            * delta : float
-                importance of the score delta
+        - model: object
+            the object of the model
+        - target: str
+            name of the target_feature
+        - features: [str] 
+            list of the features name in SAME ORDER as the the model input
+        - cat_features: [str]
+            categorical features name
+        - K: int
+            number of quantiles to use
+        - task: str
+            type of model task {'regression','reg','r', 'c','class','classification', 'ad','anomaly detection'}
+        - score_function: fun(model, x)
+            a function that has in input the model and the input data to realize the prediction. It must return a numeric score
 
         '''
+
         self._model = model
         self._target = target
         self._features = features
@@ -134,9 +139,6 @@ class ACME():
         self._baseline_pred = baseline_pred
         self._global_baseline = baseline
 
-        if self._task in ['ad','anomaly detection']: 
-            self._feature_importance() 
-
         return self
 
     def fit_local(self, dataframe, local, robust = False, label_class = None):
@@ -180,7 +182,7 @@ class ACME():
             # if the fitting procedure is not done, we frist compute the overall importance and create the numeric and cat dataframe
             # this is done to have the same ranking of the global score and common to all the local explaination
             if self._meta is None:
-                self = self.fit(dataframe, label_class=self._label_class, weights=self._ad_weights)
+                self = self.fit(dataframe, label_class=self._label_class)
                 importance_table = self._feature_importance
             else:
                 if self._feature_importance.shape[1] > 1:
@@ -218,6 +220,16 @@ class ACME():
         ------
         - local : bool  
             if true and task is AD, it return the local AD version of feature importance
+        - weights : dict 
+            Dictionary with the importance fo each element. Sum must be 1
+            * ratio : float
+                importance of local score position 
+            * distance : float
+                importance of interquanitle distance necessary to change 
+            * change : float
+                importance of the possibility to change prediction
+            * delta : float
+                importance of the score delta
 
         Return : 
         -------
