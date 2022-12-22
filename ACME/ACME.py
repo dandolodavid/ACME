@@ -40,6 +40,7 @@ class ACME():
         self._task = task
         self._meta = None
         self._local = None
+        self._label_class = None
         self._K = K
         self._score_function = score_function
 
@@ -179,15 +180,15 @@ class ACME():
             self._class_to_analyze = class_to_analyze
             self._label_class = label_class
 
-            # if the fitting procedure is not done, we frist compute the overall importance and create the numeric and cat dataframe
-            # this is done to have the same ranking of the global score and common to all the local explaination
-            if self._meta is None:
-                self = self.fit(dataframe, label_class=self._label_class)
-                importance_table = self._feature_importance
-            else:
-                if self._feature_importance.shape[1] > 1:
-                    importance_table = self._feature_importance[ 'Importance_class_'+str(class_to_analyze) ]
-                    importance_table.columns = ['importance']
+        # if the fitting procedure is not done, we frist compute the overall importance and create the numeric and cat dataframe
+        # this is done to have the same ranking of the global score and common to all the local explaination
+        if self._meta is None:
+            self = self.fit(dataframe, label_class=self._label_class)
+            importance_table = self._feature_importance
+        else:
+            if self._feature_importance.shape[1] > 1:
+                importance_table = self._feature_importance[ 'Importance_class_'+str(class_to_analyze) ]
+                importance_table.columns = ['importance']
 
         # compute local acme for regression or classifiction     
         if self._task in ['r','reg','regression'] or self._task in ['ad','anomaly detection']: 
