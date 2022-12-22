@@ -121,7 +121,7 @@ class ACME():
                 
                 # rename the columns in case of multilabel
                 if len(label_list) > 1:
-                    importance_table.rename( columns = { 'importance' : 'Importance_class_' + str(label_class[lab]) }, inplace=True )
+                    importance_table.rename( columns = { 'importance' : 'importance_class_' + str(label_class[lab]) }, inplace=True )
                 
                 # save the results
                 class_stack_importance.append(importance_table)
@@ -187,7 +187,7 @@ class ACME():
             importance_table = self._feature_importance
         else:
             if self._feature_importance.shape[1] > 1:
-                importance_table = self._feature_importance[ 'Importance_class_'+str(class_to_analyze) ]
+                importance_table = self._feature_importance[ 'importance_class_'+str(class_to_analyze) ]
                 importance_table.columns = ['importance']
 
         # compute local acme for regression or classifiction     
