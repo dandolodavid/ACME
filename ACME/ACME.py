@@ -106,6 +106,8 @@ class ACME():
         if self._task  in ['c','class','classification']:
             
             class_stack_importance = []
+            class_stack_feature_table = []
+
             if type(label_class) is list:
                 label_list = range(0,len(label_class))
             else:
@@ -125,8 +127,12 @@ class ACME():
                 
                 # save the results
                 class_stack_importance.append(importance_table)
+                class_stack_feature_table.append(feature_table)
+            
+            # concat the results
+            feature_table = pd.concat(class_stack_feature_table)
 
-            class_stack_importance = pd.concat(class_stack_importance,axis=1)
+            class_stack_importance = pd.concat(class_stack_importance,axis=1)  
             #if multilabel sum the importance of each feature in each 
             if len(label_list) > 1:
                 class_stack_importance['importance'] = class_stack_importance.sum(axis=1).values
