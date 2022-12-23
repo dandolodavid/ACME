@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='statwolfACME',
-    version='2.0.0.2',    
+    version='2.0.0.3',    
     description='ACME - Accelerated Model Explainability',
     url='https://github.com/dandolodavid/ACME',
     author='Dandolo David',
