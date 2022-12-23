@@ -114,7 +114,9 @@ class ACME():
                 label_list = [class_to_analyze]
             
             # explore every label
+            label_dict = {}
             for lab in label_list:
+                label_dict[lab] = label_class[lab]
                 feature_table, importance_table, baseline_pred, baseline = computeACME( model = self._model, dataframe = dataframe, task = self._task,
                                                                                     features = self._features, label = self._target, class_to_analyze = lab,
                                                                                     numeric_df = self._numeric_df, cat_df = self._cat_df,
@@ -131,6 +133,7 @@ class ACME():
             
             # concat the results
             feature_table = pd.concat(class_stack_feature_table)
+            feature_table['class'] = feature_table['class'].map(label_dict)
 
             class_stack_importance = pd.concat(class_stack_importance,axis=1)  
             #if multilabel sum the importance of each feature in each 
