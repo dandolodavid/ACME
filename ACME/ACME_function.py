@@ -252,12 +252,12 @@ def computeACME(model, dataframe, features, numeric_df, cat_df, label, task, loc
 
         if score_function:
             # if the score function is available
-            predictions = score_function( model, Z.drop(columns='quantile')[features] )
-            baseline_pred = score_function( model, baseline)[0]
+            predictions = score_function( model, Z.drop(columns='quantile')[features].values )
+            baseline_pred = score_function( model, baseline.values)[0]
             
         elif task in ['r','reg','regression'] or task in ['ad','anomaly detection']:
             # baseline prediction
-            baseline_pred = model.predict(baseline)[0]
+            baseline_pred = model.predict(baseline.values)[0]
             try:
                 if len(baseline_pred) == 2:
                     baseline_pred = baseline_pred[0]
@@ -265,7 +265,7 @@ def computeACME(model, dataframe, features, numeric_df, cat_df, label, task, loc
                 pass
             
             # prediciton
-            predictions = model.predict(Z.drop(columns='quantile')[features])
+            predictions = model.predict(Z.drop(columns='quantile')[features].values)
             try:
                 if predictions.shape[1] == 2:
                     predictions = predictions[:,0]
@@ -275,12 +275,12 @@ def computeACME(model, dataframe, features, numeric_df, cat_df, label, task, loc
         elif task in ['c','class','classification']:
 
             # mean prediction
-            baseline_pred = model.predict_proba(baseline)[0][class_to_analyze]
+            baseline_pred = model.predict_proba(baseline.values)[0][class_to_analyze]
             # prediciton
             try:
-                predictions = model.predict_proba(Z.drop(columns='quantile')[features])[:,class_to_analyze]
+                predictions = model.predict_proba(Z.drop(columns='quantile')[features].values)[:,class_to_analyze]
             except:
-                predictions = model.predict_proba(Z.drop(columns='quantile')[features])[class_to_analyze]
+                predictions = model.predict_proba(Z.drop(columns='quantile')[features].values)[class_to_analyze]
 
         ## ------------------------------------------------------------------------------------------------
         ## build the dataframe with the standardize_effect, the predictions and the original effects
