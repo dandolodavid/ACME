@@ -283,9 +283,11 @@ The model in this case is an isolation forest model
 
 def score_function(model, data):
     try: # for global
-        return model.decision_function(data)
+        df = model.decision_function(data)
     except: # for local
-        return model.decision_function(data.reshape(1,-1))
+        df = model.decision_function(data.reshape(1,-1))
+        
+    return -1*df
 
 acme_ifo = ACME(ifo, 'AD_score', K=50, task='regression', score_function=score_function, features=features)
 acme_ifo = acme_ifo.fit(dataset, robust = True)
