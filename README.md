@@ -1,14 +1,24 @@
 # ACME
 ACME - Accelerated Model Explainability 
 
-Model interpretability is nowadays a major field of research in machine learning, due to the increasing complexity of predictive model permitted by the technological improvements. 
-
 In this paper (https://www.sciencedirect.com/science/article/abs/pii/S0957417422021339) we propose ACME a simple procedure that studies the model behavior observing the changes in the model predictions' caused by using different quantiles of each variable used by the model.
 To evaluate the impact of the predictions' changing, we introduce a new measure, named _standardize effect_, that keeps in count both the changing direction and the overall variable impact amplitude. Standardize effects are also used to compute the final scores that represent the importance of the features. 
 
 We tested the procedure and we compare the results with the know model interpretability algorithm SHAP. The results of the procedure are very similar, both in term of results that in term of visualization, but considering the speed, ACME outperform SHAP in every situation, proving to be a very usable algorithm, in particular in prediction applications where time efficiency is crucial. 
 
 Moreover, the algorithm presents the possibility to study a single observation prediction, giving a local perspective to how the model works, using a "what if" scenario to take real-time decisions.
+
+<b> Info </b>
+
+Actually ACME works with __TABULAR DATA__ and model with task:
+
+- __regression__ :  the input model must have _predict_ function
+- __classification__ : the input model must have _predict_proba_ function
+- __anomaly detection__ : acme has some optimization to study anomaly detection task, but require to provide a _score_function_ with <i>-1 < score < 1</i> where:
+    - -1 : full normal
+    - 1 : full anomaly
+- __all models__ : if a _score function_ is specified during the initialization
+
 
 ## INSTALL 
 Install with the command:
@@ -19,34 +29,36 @@ Install with the command:
 
 <details>
   <summary><b>ACME( model, target, features = [], cat_features = [], K = 50, task = 'regression', score_function = None )</b></summary>
-Params:
+  Initialization
 
-- model: object
+    Params:
 
-    the model object, it must have the *predict* method or the ad-hoc parameter *score_function* is required
+    - model: object
 
-- target : str
+        the model object, it must have the *predict* method or the ad-hoc parameter *score_function* is required
 
-    column name with the target features. Typically, it is the predicted features (regression and classification), while using the score function could be a particular column (example: in Anomaly detection, the column with the anomaly score)
+    - target : str
 
-- features :  [str]
+        column name with the target features. Typically, it is the predicted features (regression and classification), while using the score function could be a particular column (example: in Anomaly detection, the column with the anomaly score)
 
-    list of string with the columns name for all the model features (given in the same order of the model)
+    - features :  [str]
 
-- cat_features : [str]
+        list of string with the columns name for all the model features (given in the same order of the model)
 
-    list of string with the columns name for categorical features
+    - cat_features : [str]
 
-- K : int
+        list of string with the columns name for categorical features
 
-    number of quantile used in the AcME procedure
-- task :  str
+    - K : int
 
-    str with accepted values {'regression','reg','r','c','class','classification'}. It declares the task of the model. When score_function is not None, the parameters is not necessary
+        number of quantile used in the AcME procedure
+    - task :  str
 
-- score_function : function
+        str with accepted values {'regression','reg','r','c','class','classification'}. It declares the task of the model. When score_function is not None, the parameters is not necessary
 
-    function that has as first input the model and second the input data to realize the prediction. It must return a numeric score
+    - score_function : function
+
+        function that has as first input the model and second the input data to realize the prediction. It must return a numeric score
 
 </details>
 
@@ -57,19 +69,19 @@ Params:
 
 Fit the acme explainability.
 
-Params:
+    Params:
 
-- dataframe: pd.DataFrame
+    - dataframe: pd.DataFrame
 
-    input dataframe for the model
+        input dataframe for the model
 
-- robust : bool
+    - robust : bool
 
-    if True exclude the quantile under 0.05 and over 0.95 to remove possible outliers
+        if True exclude the quantile under 0.05 and over 0.95 to remove possible outliers
 
-- label_class :
+    - label_class :
 
-    when task is classification, the label of the predicted class must be specified
+        when task is classification, the label of the predicted class must be specified
 
 </details>
 
@@ -80,23 +92,23 @@ Params:
 
 Fit the local version of AcME explainability.
 
-Params:
+    Params:
 
-- dataframe: pd.DataFrame
+    - dataframe: pd.DataFrame
 
-    input dataframe for the model
+        input dataframe for the model
 
-- local: int,str
-    
-    index of the dataframe row with the local observations we want to analyze 
+    - local: int,str
+        
+        index of the dataframe row with the local observations we want to analyze 
 
-- robust: bool
-    
-    bool, if True exclude the quantile under 0.05 and over 0.95 to remove possible outliers
+    - robust: bool
+        
+        bool, if True exclude the quantile under 0.05 and over 0.95 to remove possible outliers
 
-- label_class : int,str
+    - label_class : int,str
 
-    when task is classification, the label of the predicted class must be specified
+        when task is classification, the label of the predicted class must be specified
 
 </details>
 
@@ -115,9 +127,11 @@ Feature importance plot
 
 Generate the recap plot
 
-- local : bool
+    Params: 
 
-    if True return the local summary plot, else the global
+    - local : bool
+
+        if True return the local summary plot, else the global
 </details>
 
 <br>
@@ -129,28 +143,28 @@ Returns the feature importance calculated by AcME.
 In case of Anomaly Detection task, it provides ad hoc explanation for anomaly detection, studied for local interpretability.
 The score will show what features can altered the prediction from normal to anomalies and viceversa.
 
-Params:
+    Params:
 
-- local : bool  
-        if true and task is AD, it return the local AD version of feature importance
+    - local : bool  
+            if true and task is AD, it return the local AD version of feature importance
 
-- weights : dict
-    Dictionary with the importance for each element. Sum must be 1
-    - ratio : float
+    - weights : dict
+        Dictionary with the importance for each element. Sum must be 1
+        - ratio : float
 
-        importance of local score position  
+            importance of local score position  
 
-    - distance : float
+        - distance : float
 
-        importance of inter-quantile distance necessary to change
+            importance of inter-quantile distance necessary to change
 
-    - change : float
+        - change : float
 
-        importance of the possibility to change prediction
+            importance of the possibility to change prediction
 
-    - delta : float
+        - delta : float
 
-        importance of the score delta
+            importance of the score delta
 </details>
 
 <br>
@@ -158,14 +172,17 @@ Params:
 <details>
     <summary><b>ACME.feature_exploration(feature, local=False, plot=False)</b></summary>
 
-Generate anomaly detection feature exploration table or a plot for local observation that, chosen a specific feature, shows how the anomaly score can change because of the feature.
+Generate anomaly detection feature exploration table or a plot for local observation that, chosen a specific feature, shows how the prediction can change because of the feature.
 
         Params:
-        -------
+
         - feature : str
+
             selected feature's name
+        
         - plot : bool
-            if true returns the plot, else returs the table
+        
+            if true returns the plot, else returns the table
 
 </details>
 <br>
@@ -175,14 +192,14 @@ Generate anomaly detection feature exploration table or a plot for local observa
 
 Expose the global or local summary table with all the info calculated by acme, like standardized effect, quantile with linked original values, etc. for global interpretability
 
-Params:
+    Params:
 
-- local : bool
-    if return the local or the global table
+    - local : bool
+        if return the local or the global table
 
-- fitted_acme.local_table()
+    - fitted_acme.local_table()
 
-    return table with all the info calculated by acme, like standardized effect, quantile with linked original values, etc. for local interpretability
+        return table with all the info calculated by acme, like standardized effect, quantile with linked original values, etc. for local interpretability
 </details>
 
 <br>
@@ -192,16 +209,18 @@ Params:
 
 Expose the baseline vector used for AcME
 
-Params:
+    Params:
 
-- local : bool
-    if True expose the local baseline, else the global
+    - local : bool
+        if True expose the local baseline, else the global
 
 </details>
 
 <br>
 
 ## 2) EXAMPLES
+
+<br>
 
 <details>
     <summary><b> REGRESSION </b></summary>
