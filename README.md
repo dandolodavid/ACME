@@ -174,15 +174,15 @@ The score will show what features can altered the prediction from normal to anom
 
 Generate anomaly detection feature exploration table or a plot for local observation that, chosen a specific feature, shows how the prediction can change because of the feature.
 
-        Params:
+    Params:
 
-        - feature : str
+    - feature : str
 
-            selected feature's name
-        
-        - plot : bool
-        
-            if true returns the plot, else returns the table
+        selected feature's name
+    
+    - plot : bool
+    
+        if true returns the plot, else returns the table
 
 </details>
 <br>
@@ -286,7 +286,7 @@ def score_function(model, data):
         df = model.decision_function(data)
     except: # for local
         df = model.decision_function(data.reshape(1,-1))
-        
+
     return -1*df
 
 acme_ifo = ACME(ifo, 'AD_score', K=50, task='regression', score_function=score_function, features=features)
