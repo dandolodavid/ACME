@@ -44,7 +44,6 @@ class ACME():
         self._K = K
         self._score_function = score_function
 
-
     def fit(self, dataframe, robust = False, label_class = None):    
         '''
         Fit the acme explainability.
@@ -226,7 +225,7 @@ class ACME():
     def feature_importance(self, local=False, weights = {}):
         '''
         Returns the feature importance calculated by AcME.
-        In case of Anomaly Detection task, it provides ad hoc explaination for anomaly detection, studied for local interpretability.
+        In case of Anomaly Detection task, it provides ad hoc explanation for anomaly detection, studied for local interpretability.
         The score will show what features can altered the prediction from normal to anomalies and viceversa.
 
         Params:
@@ -234,11 +233,11 @@ class ACME():
         - local : bool  
             if true and task is AD, it return the local AD version of feature importance
         - weights : dict 
-            Dictionary with the importance fo each element. Sum must be 1
+            Dictionary with the importance for each element. Sum must be 1
             * ratio : float
-                importance of local score position 
+                importance of local score position
             * distance : float
-                importance of interquanitle distance necessary to change 
+                importance of inter-quantile distance necessary to change
             * change : float
                 importance of the possibility to change prediction
             * delta : float
@@ -261,7 +260,6 @@ class ACME():
         # else simply return the importance calculated by acme
         else:
             return self._feature_importance
-
 
     def feature_exploration(self, feature, local=False, plot=False):
         '''
@@ -298,7 +296,6 @@ class ACME():
             return fig
         else:
             return feature_table
-
 
     def summary_plot(self, local=False):
         '''
