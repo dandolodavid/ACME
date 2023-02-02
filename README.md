@@ -65,7 +65,7 @@ Install with the command:
 <br>
 
 <details>
-  <summary><b>ACME.fit(dataframe, robust = False, label_class = None)</b></summary>
+  <summary><b>ACME.explain(dataframe, robust = False, label_class = None)</b></summary>
 
 Fit the acme explainability.
 
@@ -88,23 +88,15 @@ Fit the acme explainability.
 <br>
 
 <details>
-    <summary><b>ACME.fit_local(dataframe,local, robust = False, label_class = None)</b></summary>
+    <summary><b>ACME.explain_local(series, label_class = None)</b></summary>
 
-Fit the local version of AcME explainability.
+Explain the prediction on the given input observation.
 
     Params:
 
-    - dataframe: pd.DataFrame
-
-        input dataframe for the model
-
-    - local: int,str
+    - series : pd.Series
         
-        index of the dataframe row with the local observations we want to analyze 
-
-    - robust: bool
-        
-        bool, if True exclude the quantile under 0.05 and over 0.95 to remove possible outliers
+        observation on which explain the prediction
 
     - label_class : int,str
 

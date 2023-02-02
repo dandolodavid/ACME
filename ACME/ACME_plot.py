@@ -63,8 +63,10 @@ def ACME_summary_plot(plot_df, meta):
         if 'label_class' in meta.keys():
             title = title + ' ( label_class : ' + str(meta['label_class']) + ' )'
     else:
-        if meta['task'] in ['r','reg','regression'] or meta['task'] in ['ad','anomaly detection']:
+        if meta['task'] in ['r','reg','regression']:
             title = title + ' : regression ' 
+        elif meta['task'] in ['ad','anomaly detection']:
+            title = title + ' : anomaly detection'
         else:
             title = title + ' : classification. Label_class : ' + str(meta['label_class'])       
 
@@ -109,7 +111,6 @@ def ACME_summary_plot(plot_df, meta):
 
     return fig.update_layout( title={ 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top'} )
 
-
 def feature_exploration_plot(table, feature, task):
     '''
     Generate the anomaly detection explain plot
@@ -131,7 +132,6 @@ def feature_exploration_plot(table, feature, task):
 
     # generate figure
     fig = go.Figure()
-    table = round(table,3)
     # score and values of the baseline prediction (if local the baseline is the local observation)
     actual_score = table['baseline_prediction'].values[0]
     actual_values = table.loc[table['quantile'] == table['baseline_quantile'].values[0], 'original'].values[0]

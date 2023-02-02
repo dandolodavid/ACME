@@ -1,14 +1,69 @@
 import pandas as pd
 import numpy as np
 from scipy import stats
+from functools import partial
 from ACME.utils import most_frequent
+
+
+def _percentileofscore(dataframe, feature):
+    return partial( stats.percentileofscore, a = dataframe[feature] )
+
+def get_exact_quantile(percentile_function, baseline_value):
+    return percentile_function(score = baseline_value)/100
+
+def compute_baseline_predictions(model, baseline, task, score_function, class_to_analyze):
+    '''
+    '''
+    if score_function:
+        # if the score function is available
+        baseline_pred = score_function( model, baseline.values)[0]
+        
+    elif task in ['r','reg','regression'] or task in ['ad','anomaly detection']:
+        # baseline prediction
+        baseline_pred = model.predict(baseline.values)[0]
+        
+    elif task in ['c','class','classification']:
+        # mean prediction
+        try:
+            if len(baseline_pred) == 2:
+                baseline_pred = baseline_pred[0]
+        except:
+            pass   
+        baseline_pred =  model.predict_proba(baseline.values)[0][class_to_analyze]
+
+    return baseline_pred
+    
+def compute_predictions(model, Z, features, task, score_function, class_to_analyze):
+    '''
+    '''
+    if score_function:
+        # if the score function is available
+        predictions = score_function( model, Z.drop(columns='quantile')[features].values )
+        
+    elif task in ['r','reg','regression'] or task in ['ad','anomaly detection']:
+        # prediciton
+        predictions = model.predict(Z.drop(columns='quantile')[features].values)
+        try:
+            if predictions.shape[1] == 2:
+                predictions = predictions[:,0]
+        except:
+            pass
+        
+    elif task in ['c','class','classification']:
+        # prediciton
+        try:
+            predictions = model.predict_proba(Z.drop(columns='quantile')[features].values)[:,class_to_analyze]
+        except:
+            predictions = model.predict_proba(Z.drop(columns='quantile')[features].values)[class_to_analyze]
+
+    return predictions
 
 def build_feature_exploration_table(table, feature):
     '''
     Params:
     ---------
-    - local_table : pd.DataFrame
-        local table generate from computeACME
+    - table : pd.DataFrame
+        table generate from computeACME
     - feature: str
         name of the feature to explore
 
@@ -27,7 +82,7 @@ def build_feature_exploration_table(table, feature):
 
     return feature_table
 
-def create_quantile_feature_matrix(dataframe, feature, K, robust = False, local = None):
+def create_quantile_feature_matrix(dataframe, feature, K, robust = False):
     '''
     Create a matrix with K row, made by all the columns dataframe mean values, except for the 'feature', which is replaced by K quantiles of the feature empiracal distribution.
 
@@ -41,17 +96,13 @@ def create_quantile_feature_matrix(dataframe, feature, K, robust = False, local 
         number of quantile to use
     - robust : bool
         if True then use only quantile from 0.05 to 0.95, if false use quantile from 0 to 1
-    - local : int,str (default = None)
-        if valorized the use a single observation instead of the mean as baseline
 
     Returns:
     -------
     - Z : pd.DataFrame
     '''
-    if local is None:
-        x_base = dataframe.mean()
-    else:
-        x_base = dataframe.loc[local]
+    
+    x_base = dataframe.mean()
 
     if robust:
         min_q = 0.05
@@ -65,7 +116,9 @@ def create_quantile_feature_matrix(dataframe, feature, K, robust = False, local 
     if K == 2:
         quantile = [ min_q, max_q ]
     
-    quantile = np.sort(list(quantile) + [stats.percentileofscore(dataframe[feature],x_base[feature])/100])
+    percentile_function = _percentileofscore(dataframe,feature)
+    baseline_exact_quantile = get_exact_quantile(percentile_function=percentile_function, baseline_value=x_base[feature])
+    quantile = np.sort(list(quantile) + [baseline_exact_quantile])
 
     x_j = dataframe[feature].values
     x_j_k = np.quantile(x_j,quantile)
@@ -75,9 +128,9 @@ def create_quantile_feature_matrix(dataframe, feature, K, robust = False, local 
     Z[feature] = x_j_k
     Z['quantile'] = quantile
    
-    return Z
+    return Z, percentile_function
 
-def create_level_variable_matrix(dataframe, feature, local=None):
+def create_level_variable_matrix(dataframe, feature):
     '''
     Params:
     -------
@@ -85,8 +138,6 @@ def create_level_variable_matrix(dataframe, feature, local=None):
         input dataframe
     - feaure : str
         feature name
-    - local : int,str
-        index of the local observation
 
     Returns:
     -------
@@ -94,10 +145,7 @@ def create_level_variable_matrix(dataframe, feature, local=None):
     '''
     
     x_j_k = np.unique(dataframe[feature].to_list())
-    if local is None:
-        x_most_freq = dataframe.apply(lambda x: most_frequent(x),axis=0)
-    else:
-        x_most_freq = dataframe.loc[local]
+    x_most_freq = dataframe.apply(lambda x: most_frequent(x),axis=0)
     
     Z = pd.DataFrame( x_most_freq ).T
     Z = pd.concat([Z]*len(x_j_k), ignore_index=True)
@@ -106,7 +154,7 @@ def create_level_variable_matrix(dataframe, feature, local=None):
     
     return Z
 
-def nearest_quantile(dataframe, local_value, cat_features):
+def nearest_quantile(dataframe, local_value, cat_features, debug=False):
     '''
     Find the local values nearest quantile in the importance table.
 
@@ -123,7 +171,8 @@ def nearest_quantile(dataframe, local_value, cat_features):
     -------
     - quantile values : float
     '''
-
+    if debug:
+        import pdb;pdb.set_trace()
     original_list = dataframe['original'].unique()
     if cat_features:
         quantile = dataframe.loc[ dataframe['original'] == local_value,  'quantile']
@@ -132,33 +181,26 @@ def nearest_quantile(dataframe, local_value, cat_features):
     
     return quantile.values[0]
 
-def computeACME(model, dataframe, features, numeric_df, cat_df, label, task, local, K, 
-                robust = False, class_to_analyze = None, score_function = None ):
+def computeACME(model, features, numeric_df, cat_df, task, K, robust = False, class_to_analyze = None, score_function = None ):
     '''
     Params:
     -------
     - model: object
         the object of the model
-    - dataframe: pd.DataFrame
-        the dataframe used to train the model or to predict
     - features: [str] 
         list of the features name in SAME ORDER as the the model input
     - numeric_df: pd.DataFrame
         splitted dataframe with only numerical (numeric) features
     - cat_df: pd.DataFrame
         splitted dataframe with only numerical (numeric) features
-    - label: str
-        name of the target_feature
     - task: str
         type of model task {'regression','reg','r', 'c','class','classification', 'ad','anomaly detection'}
-    - local: int, str
-        index of the local observation
     - K: int
         number of quantiles to use
     - robust : bool (default False)
         if uses the range [0.05, 0.95] for the quantiles instead fo [0,1]
     - class_to_analyze: int, str (default None)
-        class to analyze in case of classification. If None the entire classification system is analyzed. Must be specified in case of local AcME
+        class to analyze in case of classification. If None the entire classification system is analyzed. 
     - score_function: fun(model, x)
         a function that has in input the model and the input data to realize the prediction. It must return a numeric score
 
@@ -177,6 +219,7 @@ def computeACME(model, dataframe, features, numeric_df, cat_df, label, task, loc
     # for all features containers 
     table = pd.DataFrame()
     importance_table = pd.DataFrame()
+    percentile_functions={}
 
     # divide numeric and cat feature
     if type(numeric_df) != type(None): #chek if the dataframe is empty
@@ -194,35 +237,22 @@ def computeACME(model, dataframe, features, numeric_df, cat_df, label, task, loc
         
         # containers 
         features_df = pd.DataFrame()
-        features_local_df = pd.DataFrame()
        
         ## ------------------
         ## find the baseline
         ## ------------------
 
-        if local is None:
-            # if there are numeric features take the mean, else set to an empty df
-            if len(numeric_features) > 0:
-                numeric_baseline = pd.DataFrame(numeric_df.mean()).T
-            else : 
-                numeric_baseline = pd.DataFrame()
-            # if there are categoric features take the mode, else set to an empty df
-            if len(cat_features) > 0:
-                cat_baseline = cat_df.mode()
-            else : 
-                cat_baseline = pd.DataFrame()
-        else:
-            # if there are numeric features take the mean, else set to an empty df
-            if len(numeric_features) > 0:
-                numeric_baseline = pd.DataFrame(numeric_df.loc[local]).T
-            else : 
-                numeric_baseline = pd.DataFrame()
-            # if there are categoric features take the mode, else set to an empty df
-            if len(cat_features) > 0:
-                cat_baseline = pd.DataFrame(cat_df.loc[local]).T
-            else : 
-                cat_baseline = pd.DataFrame()
-
+        # if there are numeric features take the mean, else set to an empty df
+        if len(numeric_features) > 0:
+            numeric_baseline = pd.DataFrame(numeric_df.mean()).T
+        else : 
+            numeric_baseline = pd.DataFrame()
+        # if there are categoric features take the mode, else set to an empty df
+        if len(cat_features) > 0:
+            cat_baseline = cat_df.mode()
+        else : 
+            cat_baseline = pd.DataFrame()
+        
         # save the baseline
         baseline = pd.DataFrame(pd.concat([numeric_baseline, cat_baseline],axis=1))[features]
 
@@ -234,12 +264,13 @@ def computeACME(model, dataframe, features, numeric_df, cat_df, label, task, loc
         if feature in cat_features:
             Z_numeric = numeric_baseline
             if cat_features != []:
-                Z_cat = create_level_variable_matrix( cat_df, feature,local = local) 
+                Z_cat = create_level_variable_matrix( cat_df, feature) 
                 Z = pd.concat( [ Z_numeric.loc[Z_numeric.index.repeat(len(Z_cat))].reset_index(drop=True) , Z_cat.reset_index(drop=True) ] , axis = 1 )
             else:
                 Z = Z_numeric
         else:
-            Z_numeric = create_quantile_feature_matrix( numeric_df, feature, K, local = local, robust = robust )
+            Z_numeric, perc_function = create_quantile_feature_matrix( numeric_df, feature, K, robust = robust )
+            percentile_functions[feature] = perc_function
             if cat_features != []:
                 Z_cat = cat_baseline
                 Z = pd.concat( [ Z_cat.loc[Z_cat.index.repeat(len(Z_numeric))].reset_index(drop=True), Z_numeric.reset_index(drop=True) ] , axis = 1  )
@@ -250,47 +281,14 @@ def computeACME(model, dataframe, features, numeric_df, cat_df, label, task, loc
         ##  Get baseline predictions for task
         ## ------------------------------------
 
-        if score_function:
-            # if the score function is available
-            predictions = score_function( model, Z.drop(columns='quantile')[features].values )
-            baseline_pred = score_function( model, baseline.values)[0]
-            
-        elif task in ['r','reg','regression'] or task in ['ad','anomaly detection']:
-            # baseline prediction
-            baseline_pred = model.predict(baseline.values)[0]
-            try:
-                if len(baseline_pred) == 2:
-                    baseline_pred = baseline_pred[0]
-            except:
-                pass
-            
-            # prediciton
-            predictions = model.predict(Z.drop(columns='quantile')[features].values)
-            try:
-                if predictions.shape[1] == 2:
-                    predictions = predictions[:,0]
-            except:
-                pass
-            
-        elif task in ['c','class','classification']:
-
-            # mean prediction
-            baseline_pred = model.predict_proba(baseline.values)[0][class_to_analyze]
-            # prediciton
-            try:
-                predictions = model.predict_proba(Z.drop(columns='quantile')[features].values)[:,class_to_analyze]
-            except:
-                predictions = model.predict_proba(Z.drop(columns='quantile')[features].values)[class_to_analyze]
+        baseline_pred = compute_baseline_predictions(model=model, baseline=baseline, task=task, score_function=score_function, class_to_analyze = class_to_analyze)
+        predictions = compute_predictions(model=model, Z=Z, features = features, task=task, score_function=score_function, class_to_analyze=class_to_analyze)
 
         ## ------------------------------------------------------------------------------------------------
         ## build the dataframe with the standardize_effect, the predictions and the original effects
         ## ------------------------------------------------------------------------------------------------
-
-        if local:
-            features_df['effect'] = predictions
-        else:    
-            effects = predictions - baseline_pred
-            features_df['effect'] = ( effects - np.mean(effects) ) / np.sqrt( np.var(effects)+0.0001 ) * ( max(predictions) - min(predictions) )
+        effects = predictions - baseline_pred
+        features_df['effect'] = ( effects - np.mean(effects) ) / np.sqrt( np.var(effects)+0.0001 ) * ( max(predictions) - min(predictions) )
 
         features_df['predict'] = predictions
         features_df['baseline_prediction'] = baseline_pred
@@ -308,20 +306,92 @@ def computeACME(model, dataframe, features, numeric_df, cat_df, label, task, loc
         near_quantile = nearest_quantile(features_df, baseline[feature].values[0], feature in cat_features)
         features_df['baseline_quantile'] = near_quantile
 
-        features_df['size'] = 0.1 if local else 0.05
-        features_df.loc[features_df['quantile'] == near_quantile,'size'] = 0.5 if local else 0.05
-       
+        features_df['size'] = 0.05
+        
         features_df.index = np.repeat(feature, len(predictions))
         features_df.index.name = 'feature'
         table = pd.concat([table, features_df])
     
     # calculate importance and merge with the table
-    if local:
-        importance_table = None
-    else:
-        importance_table = table[['effect']].abs().reset_index().groupby('feature')[['effect']].mean().sort_values('effect',ascending=False).rename(columns={'effect':'importance'})
-        table = table.merge(importance_table, how = 'left', right_index=True, left_index=True)
+    importance_table = table[['effect']].abs().reset_index().groupby('feature')[['effect']].mean().sort_values('effect',ascending=False).rename(columns={'effect':'importance'})
+    table = table.merge(importance_table, how = 'left', right_index=True, left_index=True)
 
     #### TBD : at the moment, importance given in local interpretability and saved in local table is not the same obtained by global interpretability
-    return table, importance_table, baseline_pred, baseline
+    return table, importance_table, baseline_pred, baseline, percentile_functions
+
+def predictACME(model, series, features, percentile_functions, meta_table, task, score_function, class_to_analyze):
+    '''
+    '''
+
+    # cat and num features
+    cat_features = meta_table.loc[meta_table['type_feature']=='categorical'].index.unique().tolist()
+    num_features = meta_table.loc[meta_table['type_feature']=='numeric'].index.unique().tolist()
+
+    # prediction on baseline
+    baseline = pd.DataFrame(series[features]).T
+    baseline_pred = compute_baseline_predictions(model=model, baseline=baseline, task=task, score_function=score_function, class_to_analyze=class_to_analyze)
+    
+    # take the necessary info from the table
+    predict_meta_table = meta_table[['original','quantile','type_feature','importance']].copy()
+    
+    # prepare containers
+    Z_list = []
+    meta_list = []
+
+    # for each feature we are:
+    # 1) compute the quantile associated to the local feature value
+    # 2) generate the perturbated observation using the quantile learned in the fit procedure
+    # 3) generating metadata
+    # Then we are calculating the associated predictions and save the output in the format required for the plot
+
+    for feature in features:
+        feature_table = predict_meta_table.loc[feature]
+        if feature in num_features:
+            Z_list.append(baseline)
+            meta_list.append({'feature':feature_table.index.unique()[0],
+                            'quantile':get_exact_quantile(percentile_functions[feature],baseline[feature])[0],
+                            'original':baseline[feature].values[0],
+                            'type_feature':feature_table['type_feature'].unique()[0],
+                            'importance':feature_table['importance'].unique()[0]
+                            })
+
+        for idx,row in feature_table.iterrows():
+            tmp = baseline.copy()
+            tmp[feature] = row['original']
+            Z_list.append(tmp)
+            meta_list.append({'feature':idx,
+                              'quantile':row['quantile'],
+                              'original':row['original'],
+                              'type_feature':row['type_feature'],
+                              'importance':row['importance']})
+    
+    
+    Z = pd.concat(Z_list).reset_index(drop=True)
+    meta = pd.DataFrame.from_dict(meta_list)
+    Z = pd.concat([Z,meta],axis=1).drop(columns=['original'])
+    predictions = compute_predictions(model=model, Z=Z, features=features, task=task, score_function=score_function, class_to_analyze=class_to_analyze)
+    
+    meta['effect'] = predictions
+    meta['predict'] = predictions
+    meta['baseline_prediction'] = baseline_pred
+    meta['baseline_quantile'] = None
+    meta['class'] = class_to_analyze
+    meta['size'] = 0.05
+
+    for feature in features:
+        features_df = meta.loc[meta['feature']==feature]
+        near_quantile = nearest_quantile(features_df, baseline[feature].values[0], feature in cat_features)
+        meta.loc[meta['feature']==feature,'baseline_quantile'] = near_quantile
+        meta.loc[np.logical_and(meta['quantile'] == near_quantile,
+                                meta['feature']==feature),'size'] = 0.3
+
+    meta = meta.set_index('feature')
+
+    return meta, baseline   
+
+
+
+
+
+
 

@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from ACME.utils import clean_list
-from ACME.ACME_function import computeACME, build_feature_exploration_table
+from ACME.ACME_function import computeACME, build_feature_exploration_table, predictACME
 from ACME.ACME_plot import ACME_summary_plot, feature_exploration_plot, ACME_barplot_multicalss
 from ACME.ACME_anomaly_detection import build_anomaly_detection_feature_exploration_table, computeAnomalyDetectionImportance
 import plotly.express as px
@@ -43,8 +43,10 @@ class ACME():
         self._label_class = None
         self._K = K
         self._score_function = score_function
+        self._class_to_analyze = None
+        self._label_class = None
 
-    def fit(self, dataframe, robust = False, label_class = None):    
+    def explain(self, dataframe, robust = False, label_class = None):    
         '''
         Fit the acme explainability.
 
@@ -97,11 +99,11 @@ class ACME():
 
         # compute local acme for regression or classifiction  
         if self._task in ['r','reg','regression'] or self._task in ['ad','anomaly detection']: 
-            feature_table, importance_table, baseline_pred, baseline = computeACME( model = self._model, dataframe = dataframe, task = self._task, 
-                                                                                features = self._features, label = self._target,  
+            feature_table, importance_table, baseline_pred, baseline, perc_functions = computeACME( model = self._model, task = self._task, 
+                                                                                features = self._features, 
                                                                                 numeric_df = self._numeric_df, cat_df = self._cat_df,
                                                                                 score_function = self._score_function,
-                                                                                local = None, K = self._K, robust = robust )
+                                                                                K = self._K, robust = robust )
         if self._task  in ['c','class','classification']:
             
             class_stack_importance = []
@@ -117,11 +119,11 @@ class ACME():
             
             for lab in label_list:
                 label_dict[lab] = class_map[lab]
-                feature_table, importance_table, baseline_pred, baseline = computeACME( model = self._model, dataframe = dataframe, task = self._task,
-                                                                                    features = self._features, label = self._target, class_to_analyze = lab,
+                feature_table, importance_table, baseline_pred, baseline, perc_functions = computeACME( model = self._model, task = self._task,
+                                                                                    features = self._features, class_to_analyze = lab,
                                                                                     numeric_df = self._numeric_df, cat_df = self._cat_df,
                                                                                     score_function = self._score_function, 
-                                                                                    local = None, K=self._K, robust = robust )
+                                                                                    K=self._K, robust = robust )
                 
                 # rename the columns in case of multilabel
                 if len(label_list) > 1:
@@ -148,31 +150,34 @@ class ACME():
         self._feature_importance = importance_table.sort_values('importance', ascending = False).copy()
         self._baseline_pred = baseline_pred
         self._global_baseline = baseline
+        self._perc_functions = perc_functions
 
         return self
 
-    def fit_local(self, dataframe, local, robust = False, label_class = None):
+    def explain_local(self, series, label_class = None):
         '''
-        Fit the local version of AcME explainability.
-
         Params:
         -------
-        - dataframe : pd.DataFrame
-            input dataframe
-        - local : int,str
-            dataframe index of the desired row
-        - robust : bool (default False)
-            if True use only quantile from 0.05 and 0.95, if False use from 0 to 1
+        - series : pd.Series
+            observation on which explain the prediction
         - label_class : str,int (default None)
             if task is classification, specify the class of interest
+
+        Returns:
+        --------
+        - pd.DataFrame
         '''
 
-        # save the index of the local observation
-        self._local = local
-        
         # if the label class is given, find the corrispective position in the model class map
         # else auto set as label class the first class
         # N.B. : label_class is the class name, class_to_analyze is the label_class corrispective number in the model class map
+        
+        # save the index of the local observation, it the name of the series (corrisponding to the dataframe index)
+        self._local = series.name
+
+        if self._meta is None:
+            raise InterruptedError("You must first fit the acme explaination model with the 'fit' command")
+
         if self._task  in ['c','class','classification']:
             class_map = np.array(self._model.classes_)
             if label_class is not None:
@@ -188,39 +193,29 @@ class ACME():
             # save the class to analize and the label
             self._class_to_analyze = class_to_analyze
             self._label_class = label_class
-
-        # if the fitting procedure is not done, we frist compute the overall importance and create the numeric and cat dataframe
+        
+         # if the fitting procedure is not done, we frist compute the overall importance and create the numeric and cat dataframe
         # this is done to have the same ranking of the global score and common to all the local explaination
-        if self._meta is None:
-            self = self.fit(dataframe, label_class=self._label_class)
-            importance_table = self._feature_importance
-        else:
-            if self._feature_importance.shape[1] > 1:
+        if self._feature_importance.shape[1] > 1:
                 importance_table = self._feature_importance[ 'importance_class_'+str(class_to_analyze) ]
                 importance_table.columns = ['importance']
 
-        # compute local acme for regression or classifiction     
-        if self._task in ['r','reg','regression'] or self._task in ['ad','anomaly detection']: 
-            local_table, out, baseline_pred, baseline = computeACME( model = self._model, dataframe = dataframe, task = self._task,
-                                                    features = self._features, label = self._target, 
-                                                    numeric_df = self._numeric_df, cat_df = self._cat_df, 
-                                                    score_function = self._score_function,
-                                                    local = local, K = self._K, robust = robust )
+        local_table, baseline = predictACME(model=self._model, 
+                    series=series,
+                    features=self._features,
+                    meta_table=self._meta,
+                    percentile_functions=self._perc_functions,
+                    task=self._task, 
+                    score_function=self._score_function, 
+                    class_to_analyze=self._class_to_analyze)
         
         if self._task in ['c','class','classification']:
-            local_table, out, baseline_pred, baseline = computeACME( model = self._model, dataframe = dataframe, task = self._task,
-                                                    features = self._features, label = self._target, class_to_analyze = class_to_analyze,
-                                                    numeric_df = self._numeric_df, cat_df = self._cat_df, 
-                                                    score_function = self._score_function,
-                                                    local = local, K = self._K, robust = robust )
-            
             local_table['class'] = local_table['class'].map({class_to_analyze : class_map[class_to_analyze]})
 
-        # save the local table
         self._local_meta = local_table
         self._local_baseline = baseline
 
-        return self   
+        return self
 
     def feature_importance(self, local=False, weights = {}):
         '''
