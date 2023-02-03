@@ -38,8 +38,8 @@ class ACME():
         self._numeric_features = list(np.setdiff1d(features, cat_features))
         self._cat_features = cat_features
         self._task = task
-        self._meta = None
-        self._local = None
+        self._global_explain = {}
+        self._local_explain = {}
         self._K = K
         self._score_function = score_function
         self._class_to_analyze = None
@@ -145,10 +145,15 @@ class ACME():
             importance_table = class_stack_importance
 
         # create the outputs
-        self._meta = feature_table.copy()
-        self._feature_importance = importance_table.sort_values('importance', ascending = False).copy()
-        self._baseline_pred = baseline_pred
-        self._global_baseline = baseline
+        self._global_explain = {'meta':feature_table.copy(),
+                                'feature_importance':importance_table.sort_values('importance', ascending = False).copy(),
+                                'baseline_pred':baseline_pred,
+                                'baseline':baseline,
+                                }
+        #self._global_meta = feature_table.copy()
+        #self._global_feature_importance = importance_table.sort_values('importance', ascending = False).copy()
+        #self._global_baseline_pred = baseline_pred
+        #self._global_baseline = baseline
         self._perc_functions = perc_functions
 
         return self
@@ -170,12 +175,9 @@ class ACME():
         # if the label class is given, find the corrispective position in the model class map
         # else auto set as label class the first class
         # N.B. : label_class is the class name, class_to_analyze is the label_class corrispective number in the model class map
-        
-        # save the index of the local observation, it the name of the series (corrisponding to the dataframe index)
-        self._local = series.name
 
-        if self._meta is None:
-            raise InterruptedError("You must first fit the acme explaination model with the 'fit' command")
+        if len(self._global_explain.keys())==0:
+            raise InterruptedError("You must first fit the acme explaination model with the 'explain' command on the same data used to train the model")
 
         if self._task  in ['c','class','classification']:
             class_map = np.array(self._model.classes_)
@@ -192,17 +194,11 @@ class ACME():
             # save the class to analize and the label
             self._class_to_analyze = class_to_analyze
             self._label_class = label_class
-        
-         # if the fitting procedure is not done, we frist compute the overall importance and create the numeric and cat dataframe
-        # this is done to have the same ranking of the global score and common to all the local explaination
-        if self._feature_importance.shape[1] > 1:
-                importance_table = self._feature_importance[ 'importance_class_'+str(class_to_analyze) ]
-                importance_table.columns = ['importance']
 
-        local_table, baseline = predictACME(model=self._model, 
+        local_table, local_importance_table, local_baseline_pred, local_baseline = predictACME(model=self._model, 
                     series=series,
                     features=self._features,
-                    meta_table=self._meta,
+                    meta_table=self._global_explain['meta'],
                     percentile_functions=self._perc_functions,
                     task=self._task, 
                     score_function=self._score_function, 
@@ -211,8 +207,16 @@ class ACME():
         if self._task in ['c','class','classification']:
             local_table['class'] = local_table['class'].map({class_to_analyze : class_map[class_to_analyze]})
 
-        self._local_meta = local_table
-        self._local_baseline = baseline
+        self._local_explain = {'meta':local_table.copy(),
+                                'feature_importance':local_importance_table.sort_values('importance', ascending = False).copy(),
+                                'baseline_pred':local_baseline_pred,
+                                'baseline':local_baseline,
+                                'local_name':series.name}  # save the index of the local observation, it's the name of the series (corrisponding to the dataframe index)
+
+        #self._local_meta = local_table
+        #self._local_baseline = local_baseline
+        #self._local_importance_table = local_importance_table
+        #self._local_baseline_pred = local_baseline_pred
 
         return self
 
@@ -246,14 +250,18 @@ class ACME():
         # calculate the importance for the selected row anomaly detection task
         if self._task in ['ad','anomaly detection'] and local:
 
-            local_table = self._local_meta.drop(columns='size').copy()
+            local_table = self._local_explain['meta'].drop(columns='size').copy()
             importance_df = computeAnomalyDetectionImportance(local_table, weights = weights)   
         
             return importance_df
 
-        # else simply return the importance calculated by acme
+        # if local then we return the local importance
+        elif local:
+            return self._local_explain['feature_importance']
+
+        # else simply return the importance calculated by acme for global explain
         else:
-            return self._feature_importance
+            return self._global_explain['feature_importance']
 
     def feature_exploration(self, feature, local=False, plot=False):
         '''
@@ -274,9 +282,9 @@ class ACME():
 
         # extract the desired table
         if local:
-            table = self._local_meta
+            table = self._local_explain['meta']
         else:
-            table = self._meta
+            table = self._global_explain['meta']
 
         # build the correct feature exploration table
         if self._task in ['ad','anomaly detection']:
@@ -307,35 +315,29 @@ class ACME():
 
         # if desired explainability is global, task is classification and there are multi label: produce the bar plot
         if self._task in ['c','class','classification'] and type(self._label_class) is list and not local:
-            fig = ACME_barplot_multicalss(self._feature_importance, self._label_class)
+            fig = ACME_barplot_multicalss(self._global_explain['feature_importance'], self._label_class)
 
         # generate the quantile/feature/effect plot
         else:       
             meta = dict()
             meta['task'] = self._task
+            meta['local'] = False
+
             if self._task  in ['c','class','classification']:
                 meta['label_class'] = self._label_class
+                meta['local'] = False
+                
             if local:
-                table = self._local_meta
+                table = self._local_explain['meta']
                 meta['local'] = True
-                meta['index'] = self._local 
-                meta['baseline'] = self._baseline_pred
+                meta['index'] = self._local_explain['local_name']
+                meta['baseline'] = self._local_explain['baseline_pred']
             else:
-                table = self._meta
+                table = self._global_explain['meta']
                 meta['local'] = False
 
-            plot_df = pd.DataFrame()
-            out = self._feature_importance.sort_values('importance')
-
-            # for each feature we add the feature's table sorted to the plot dataframe
-            for idx in out.index:
-                tmp = table.loc[idx].sort_values('original')
-                plot_df = pd.concat([plot_df,tmp])
-
             # prepare for the plotting
-            plot_df.drop_duplicates(subset = ['effect','predict','quantile'], keep ='first')
-            plot_df.reset_index(inplace=True)
-            plot_df.rename(columns={'index':'feature'}, inplace=True)
+            plot_df = table.sort_values('original').reset_index().rename(columns={'index':'feature'}).copy()
 
             # if local set the refering x to the local values observation
             # for the global set to 0
@@ -353,22 +355,31 @@ class ACME():
         
         return fig
 
-    def bar_plot(self):
+    def bar_plot(self, local=False):
         '''
         Feature importance plot
         '''
         if self._task in ['r', 'reg', 'regression']:
             title = 'Barplot of feature importance: regression'
+        elif self._task in ['ad','anomaly detection']:
+            title = 'Barplot of feature importance: anomaly detection'
         else:
             title = 'Barplot of feature importance: classification'
 
-        fig = px.bar(round(self._feature_importance.reset_index().sort_values('importance').rename(columns={'index':'feature'}),3), 
+        if local:
+            table = self._local_explain['feature_importance']
+            title = 'Local importance observation ID: ' + str(self._local_explain['local_name']) + '.<br>'+title
+        else:
+            table = self._global_explain['feature_importance']
+
+        table = round(table.reset_index().sort_values('importance').rename(columns={'index':'feature'}),3)
+        fig = px.bar(table, 
                     x='importance',
                     y='feature', 
                     orientation='h', 
                     title = title)
+
         fig.update_traces(hovertemplate = 'Feature:<b>%{y}</b><br>Importance:%{x}')
-        
         return fig.update_layout( title={ 'y':0.9, 'x':0.5, 'xanchor': 'center', 'yanchor': 'top'} )
     
     def summary_table(self, local=False):
@@ -376,18 +387,18 @@ class ACME():
         Expose the global or local summary table
         '''
         if local:
-            return self._local_meta.drop(columns='size')     
+            return self._local_explain['meta'].drop(columns='size')     
         else: 
-            return self._meta.drop(columns='size')     
+            return self._global_explain['meta'].drop(columns='size')
             
     def baseline_values(self, local=False):
         '''
         Expose the baseline vector used for AcME
         '''
         if local:
-            return self._local_baseline
+            return self._local_explain['baseline']
         else:
-            return self._global_baseline
+            return self._global_explain['baseline']
 
     def metadata(self):
 
@@ -397,7 +408,7 @@ class ACME():
         'numeric_features':self._numeric_features,
         'cat_features':self._cat_features,
         'task':self._task,
-        'meta':self._meta,
-        'local':self._local,
+        'global_explain':self._global_explain,
+        'local_explain':self._local_explain,
         'K':self._K,
         'score_function':self._score_function}
