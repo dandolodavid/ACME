@@ -40,7 +40,6 @@ class ACME():
         self._task = task
         self._meta = None
         self._local = None
-        self._label_class = None
         self._K = K
         self._score_function = score_function
         self._class_to_analyze = None
@@ -389,3 +388,16 @@ class ACME():
             return self._local_baseline
         else:
             return self._global_baseline
+
+    def metadata(self):
+
+        return {'model':self._model,
+        'target':self._target,
+        'features':self._features,
+        'numeric_features':self._numeric_features,
+        'cat_features':self._cat_features,
+        'task':self._task,
+        'meta':self._meta,
+        'local':self._local,
+        'K':self._K,
+        'score_function':self._score_function}
