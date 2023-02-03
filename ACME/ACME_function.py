@@ -352,7 +352,6 @@ def predictACME(model, series, features, percentile_functions, meta_table, task,
                             'quantile':get_exact_quantile(percentile_functions[feature],baseline[feature])[0],
                             'original':baseline[feature].values[0],
                             'type_feature':feature_table['type_feature'].unique()[0],
-                            'importance':feature_table['importance'].unique()[0]
                             })
 
         for idx,row in feature_table.iterrows():
@@ -362,36 +361,33 @@ def predictACME(model, series, features, percentile_functions, meta_table, task,
             meta_list.append({'feature':idx,
                               'quantile':row['quantile'],
                               'original':row['original'],
-                              'type_feature':row['type_feature'],
-                              'importance':row['importance']})
+                              'type_feature':row['type_feature']
+                              })
     
     
     Z = pd.concat(Z_list).reset_index(drop=True)
-    meta = pd.DataFrame.from_dict(meta_list)
-    Z = pd.concat([Z,meta],axis=1).drop(columns=['original'])
+    table = pd.DataFrame.from_dict(meta_list)
+    Z = pd.concat([Z,table],axis=1).drop(columns=['original'])
     predictions = compute_predictions(model=model, Z=Z, features=features, task=task, score_function=score_function, class_to_analyze=class_to_analyze)
     
-    meta['effect'] = predictions
-    meta['predict'] = predictions
-    meta['baseline_prediction'] = baseline_pred
-    meta['baseline_quantile'] = None
-    meta['class'] = class_to_analyze
-    meta['size'] = 0.05
+    table['predict'] = predictions
+    table['baseline_prediction'] = baseline_pred
+    table['effect'] = table['predict'] - table['baseline_prediction']
+    table['baseline_quantile'] = None
+    table['class'] = class_to_analyze
+    table['size'] = 0.05
+
+    # calculate importance and merge with the table
+    importance_table = table[['effect']].abs().reset_index().groupby('feature')[['effect']].mean().sort_values('effect',ascending=False).rename(columns={'effect':'importance'})
+    table = table.merge(importance_table, how = 'left', right_index=True, left_index=True)
 
     for feature in features:
-        features_df = meta.loc[meta['feature']==feature]
+        features_df = table.loc[table['feature']==feature]
         near_quantile = nearest_quantile(features_df, baseline[feature].values[0], feature in cat_features)
-        meta.loc[meta['feature']==feature,'baseline_quantile'] = near_quantile
-        meta.loc[np.logical_and(meta['quantile'] == near_quantile,
-                                meta['feature']==feature),'size'] = 0.3
+        table.loc[table['feature']==feature,'baseline_quantile'] = near_quantile
+        table.loc[np.logical_and(table['quantile'] == near_quantile,
+                                table['feature']==feature),'size'] = 0.3
 
-    meta = meta.set_index('feature')
+    table = table.set_index('feature')
 
-    return meta, baseline   
-
-
-
-
-
-
-
+    return table, baseline   
