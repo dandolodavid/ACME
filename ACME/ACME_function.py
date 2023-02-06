@@ -154,7 +154,7 @@ def create_level_variable_matrix(dataframe, feature):
     
     return Z
 
-def nearest_quantile(dataframe, local_value, cat_features, debug=False):
+def nearest_quantile(dataframe, local_value, cat_features):
     '''
     Find the local values nearest quantile in the importance table.
 
@@ -171,8 +171,6 @@ def nearest_quantile(dataframe, local_value, cat_features, debug=False):
     -------
     - quantile values : float
     '''
-    if debug:
-        import pdb;pdb.set_trace()
     original_list = dataframe['original'].unique()
     if cat_features:
         quantile = dataframe.loc[ dataframe['original'] == local_value,  'quantile']
@@ -377,10 +375,6 @@ def predictACME(model, series, features, percentile_functions, meta_table, task,
     table['class'] = class_to_analyze
     table['size'] = 0.05
 
-    # calculate importance and merge with the table
-    importance_table = table[['effect']].abs().reset_index().groupby('feature')[['effect']].mean().sort_values('effect',ascending=False).rename(columns={'effect':'importance'})
-    table = table.merge(importance_table, how = 'left', right_index=True, left_index=True)
-
     for feature in features:
         features_df = table.loc[table['feature']==feature]
         near_quantile = nearest_quantile(features_df, baseline[feature].values[0], feature in cat_features)
@@ -389,5 +383,8 @@ def predictACME(model, series, features, percentile_functions, meta_table, task,
                                 table['feature']==feature),'size'] = 0.3
 
     table = table.set_index('feature')
+    # calculate importance and merge with the table
+    importance_table = table[['effect']].abs().reset_index().groupby('feature')[['effect']].mean().sort_values('effect',ascending=False).rename(columns={'effect':'importance'})
+    table = table.merge(importance_table, how = 'left', right_index=True, left_index=True)
 
-    return table, baseline   
+    return table, importance_table, baseline_pred, baseline

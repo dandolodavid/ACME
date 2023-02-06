@@ -66,7 +66,7 @@ def ACME_summary_plot(plot_df, meta):
         if meta['task'] in ['r','reg','regression']:
             title = title + ' : regression ' 
         elif meta['task'] in ['ad','anomaly detection']:
-            title = title + ' : anomaly detection'
+            title = title + ' : anomaly detection '
         else:
             title = title + ' : classification. Label_class : ' + str(meta['label_class'])       
 
@@ -78,7 +78,8 @@ def ACME_summary_plot(plot_df, meta):
     
     # draw plot
     fig = px.scatter(round(plot_df,3), 
-                        x = 'effect', y = 'feature', 
+                        x = 'predict' if meta['local'] else 'effect', 
+                        y = 'feature', 
                         color = 'quantile', size = 'size' if meta['local'] else None, 
                         hover_data = ['original'],
                         color_continuous_scale = color_scale,
@@ -86,7 +87,7 @@ def ACME_summary_plot(plot_df, meta):
 
     # add local score line
     shapes = [dict( 
-                    type='line', 
+                    type = 'line', 
                     x0 = meta['x'], y0 = y_bottom, 
                     x1 = meta['x'], y1 = y_top, 
                     line = dict(color = color_local, 
