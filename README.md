@@ -1,10 +1,10 @@
 # ACME
-ACME - Accelerated Model Explainability 
+ACME - Accelerated Model Explainability
 
 In this paper (https://www.sciencedirect.com/science/article/abs/pii/S0957417422021339) we propose ACME a simple procedure that studies the model behavior observing the changes in the model predictions' caused by using different quantiles of each variable used by the model.
 To evaluate the impact of the predictions' changing, we introduce a new measure, named _standardize effect_, that keeps in count both the changing direction and the overall variable impact amplitude. Standardize effects are also used to compute the final scores that represent the importance of the features. 
 
-We tested the procedure and we compare the results with the know model interpretability algorithm SHAP. The results of the procedure are very similar, both in term of results that in term of visualization, but considering the speed, ACME outperform SHAP in every situation, proving to be a very usable algorithm, in particular in prediction applications where time efficiency is crucial. 
+We tested the procedure and we compare the results with the know model interpretability algorithm SHAP. The results of the procedure are very similar, both in term of results that in term of visualization, but considering the speed, ACME outperform SHAP in every situation, proving to be a very usable algorithm, in particular in prediction applications where time efficiency is crucial.
 
 Moreover, the algorithm presents the possibility to study a single observation prediction, giving a local perspective to how the model works, using a "what if" scenario to take real-time decisions.
 
@@ -18,7 +18,6 @@ Actually ACME works with __TABULAR DATA__ and model with task:
     - -1 : full normal
     - 1 : full anomaly
 - __all models__ : if a _score function_ is specified during the initialization
-
 
 ## INSTALL 
 Install with the command:
@@ -107,9 +106,15 @@ Explain the prediction on the given input observation.
 <br>
 
 <details>
-    <summary><b>ACME.bar_plot()</b></summary>
+    <summary><b>ACME.bar_plot(local=False)</b></summary>
 
 Feature importance plot
+
+    Params: 
+
+    - local : bool
+
+        if True return the local bar plot of feature importance, else the global
 </details>
 
 <br>

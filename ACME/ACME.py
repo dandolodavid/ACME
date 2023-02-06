@@ -146,7 +146,7 @@ class ACME():
 
         # create the outputs
         self._meta = feature_table.copy()
-        self._feature_importance = importance_table.sort_values('importance', ascending = False).copy()
+        self._global_feature_importance = importance_table.sort_values('importance', ascending = False).copy()
         self._baseline_pred = baseline_pred
         self._global_baseline = baseline
         self._perc_functions = perc_functions
@@ -195,8 +195,8 @@ class ACME():
         
          # if the fitting procedure is not done, we frist compute the overall importance and create the numeric and cat dataframe
         # this is done to have the same ranking of the global score and common to all the local explaination
-        if self._feature_importance.shape[1] > 1:
-                importance_table = self._feature_importance[ 'importance_class_'+str(class_to_analyze) ]
+        if self._global_feature_importance.shape[1] > 1:
+                importance_table = self._global_feature_importance[ 'importance_class_'+str(class_to_analyze) ]
                 importance_table.columns = ['importance']
 
         local_table, baseline = predictACME(model=self._model, 
@@ -253,7 +253,7 @@ class ACME():
 
         # else simply return the importance calculated by acme
         else:
-            return self._feature_importance
+            return self._global_feature_importance
 
     def feature_exploration(self, feature, local=False, plot=False):
         '''
@@ -307,7 +307,7 @@ class ACME():
 
         # if desired explainability is global, task is classification and there are multi label: produce the bar plot
         if self._task in ['c','class','classification'] and type(self._label_class) is list and not local:
-            fig = ACME_barplot_multicalss(self._feature_importance, self._label_class)
+            fig = ACME_barplot_multicalss(self._global_feature_importance, self._label_class)
 
         # generate the quantile/feature/effect plot
         else:       
@@ -325,7 +325,7 @@ class ACME():
                 meta['local'] = False
 
             plot_df = pd.DataFrame()
-            out = self._feature_importance.sort_values('importance')
+            out = self._global_feature_importance.sort_values('importance')
 
             # for each feature we add the feature's table sorted to the plot dataframe
             for idx in out.index:
@@ -362,7 +362,7 @@ class ACME():
         else:
             title = 'Barplot of feature importance: classification'
 
-        fig = px.bar(round(self._feature_importance.reset_index().sort_values('importance').rename(columns={'index':'feature'}),3), 
+        fig = px.bar(round(self._global_feature_importance.reset_index().sort_values('importance').rename(columns={'index':'feature'}),3), 
                     x='importance',
                     y='feature', 
                     orientation='h', 
