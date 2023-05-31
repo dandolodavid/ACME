@@ -337,7 +337,7 @@ class ACME():
                 meta['local'] = False
 
             # prepare for the plotting
-            plot_df = table.sort_values('original').reset_index().rename(columns={'index':'feature'}).copy()
+            plot_df = table.sort_values(['importance','original']).reset_index().rename(columns={'index':'feature'}).copy()
 
             # if local set the refering x to the local values observation
             # for the global set to 0
