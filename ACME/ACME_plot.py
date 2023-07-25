@@ -71,7 +71,7 @@ def ACME_summary_plot(plot_df, meta):
             title = title + ' : classification. Label_class : ' + str(meta['label_class'])       
 
     #set the color for the local score line
-    if (meta['local'] is not None) and (meta['task'] in ['ad','anomaly detection']):
+    if meta['local'] and (meta['task'] in ['ad','anomaly detection']):
         color_local = 'red' if meta['x'] > 0 else 'blue' 
     else:
         color_local = 'black'
@@ -95,7 +95,7 @@ def ACME_summary_plot(plot_df, meta):
                                 dash = 'dash')
                     )]
     # if anomaly detection add a line that marks the thresholds for state changing
-    if meta['task'] in meta['task'] in ['ad','anomaly detection']:
+    if meta['task'] in meta['task'] in ['ad','anomaly detection'] and meta['local']:
         shapes = shapes + [dict( 
                                     type='line', 
                                     x0 = 0.5, y0 = y_bottom, 

@@ -299,7 +299,7 @@ class ACME():
         else:
             return feature_table
 
-    def summary_plot(self, local=False):
+    def summary_plot(self, local=False, weights = {}):
         '''
         Generate the recap plot
 
@@ -307,6 +307,16 @@ class ACME():
         -------
         - local : bool
             if local or global plot 
+        - weights : dict
+            Dictionary with the importance for each element used in AD. Sum must be 1
+                * ratio : float
+                    importance of local score position
+                * distance : float
+                    importance of inter-quantile distance necessary to change
+                * change : float
+                    importance of the possibility to change prediction
+                * delta : float
+                    importance of the score delta
         
         Returns:
         --------
@@ -332,12 +342,19 @@ class ACME():
                 meta['local'] = True
                 meta['index'] = self._local_explain['local_name']
                 meta['baseline'] = self._local_explain['baseline_pred']
+
+                if self._task in ['ad','anomaly detection']:
+                    local_table = self._local_explain['meta'].drop(columns='size').copy()
+                    importance_df = computeAnomalyDetectionImportance(local_table, weights = weights)
+                    table = table.drop(columns=['importance'])
+                    table = table.merge(importance_df[['importance']],left_index=True,right_index=True)
+                    
             else:
                 table = self._global_explain['meta']
                 meta['local'] = False
 
             # prepare for the plotting
-            plot_df = table.sort_values(['importance','original']).reset_index().rename(columns={'index':'feature'}).copy()
+            plot_df = table.sort_values(['importance','quantile']).reset_index().rename(columns={'index':'feature'}).copy()
 
             # if local set the refering x to the local values observation
             # for the global set to 0
