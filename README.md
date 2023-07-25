@@ -14,9 +14,10 @@ Actually ACME works with __TABULAR DATA__ and model with task:
 
 - __regression__ :  the input model must have _predict_ function
 - __classification__ : the input model must have _predict_proba_ function
-- __anomaly detection__ : acme has some optimization to study anomaly detection task, but require to provide a _score_function_ with <i>-1 < score < 1</i> where:
-    - -1 : full normal
+- __anomaly detection__ : acme has some optimization to study anomaly detection task, but require to provide a _score_function_ with <i>0 < score < 1</i> where:
+    - 0 : full normal
     - 1 : full anomaly
+    - changepoint is at 0.5
 - __all models__ : if a _score function_ is specified during the initialization
 
 ## INSTALL 

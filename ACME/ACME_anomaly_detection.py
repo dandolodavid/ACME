@@ -18,8 +18,8 @@ def build_anomaly_detection_feature_exploration_table(local_table, feature):
     # calculate the effect 
     feature_table = local_table.loc[feature].copy()
     feature_table['direction'] = 'normal'
-    feature_table.loc[feature_table['predict'] > 0,'direction'] = 'anomalies'
-    feature_table['effect'] = np.abs(feature_table['baseline_prediction'] - feature_table['predict']) * np.sign(-2*(feature_table['baseline_prediction']>feature_table['predict']).astype(int)+1)
+    feature_table.loc[feature_table['predict'] > 0.5,'direction'] = 'anomalies'
+    feature_table['effect'] = feature_table['predict'] - feature_table['baseline_prediction']
 
     return feature_table
 
@@ -67,7 +67,8 @@ def computeAnomalyDetectionImportance(local_table, weights={}):
         tmp = local_table.loc[feature]
 
         # search when the sign changes
-        tmp['sign_change'] = (np.sign(tmp['baseline_prediction']) != np.sign(tmp['predict'])).astype(int)
+        tmp['state_pred_change'] = (np.sign(tmp['baseline_prediction']*2-1) != np.sign(tmp['predict']*2-1)).astype(int)
+
         tmp = tmp.reset_index(drop=True)
         # calculate quantile distance
         tmp['quantile_distance'] = np.abs(tmp['quantile']-tmp['baseline_quantile'])
@@ -83,17 +84,17 @@ def computeAnomalyDetectionImportance(local_table, weights={}):
         delta = np.abs( max_score - min_score )
 
         #ratio 
-        ratio = (local_score - min_score)/delta
+        ratio = local_score - min_score
         
         # change
-        if np.sign(min_score) !=  np.sign(max_score):
+        if min_score<0.5 and max_score>=0.5:
             change=1
         else:
             change=0
         
         # number of quantile required to change the state 
         if change == 1:
-            distance = tmp.loc[tmp['sign_change']==1,'quantile_distance'].min() 
+            distance = tmp.loc[tmp['state_pred_change']==1,'quantile_distance'].min() 
         else:
             distance = 1
 

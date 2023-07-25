@@ -98,8 +98,8 @@ def ACME_summary_plot(plot_df, meta):
     if meta['task'] in meta['task'] in ['ad','anomaly detection']:
         shapes = shapes + [dict( 
                                     type='line', 
-                                    x0 = 0, y0 = y_bottom, 
-                                    x1 = 0, y1 = y_top, 
+                                    x0 = 0.5, y0 = y_bottom, 
+                                    x1 = 0.5, y1 = y_top, 
                                     line = dict(color = 'black', 
                                                 width = 2,
                                                 dash = 'solid')
@@ -139,7 +139,7 @@ def feature_exploration_plot(table, feature, task):
 
     # set colors based on task
     if task in ['ad','anomaly detection']:
-        color = 'red' if actual_score > 0 else 'blue'
+        color = 'red' if actual_score >= 0.5 else 'blue'
     else: 
         color = 'black'
 
@@ -153,23 +153,23 @@ def feature_exploration_plot(table, feature, task):
         plot_meta['upper_trace'] = {'name' : 'upper', 'value':'upper'}
 
     # add effects that pushes the score to anomaly state
-    fig.add_bar(x = table.loc[table.direction ==  plot_meta['lower_trace']['value'],'effect'], 
-                y = table.loc[table.direction ==  plot_meta['lower_trace']['value'],'original'].values, 
+    fig.add_bar(x = table.loc[table['direction'] ==  plot_meta['upper_trace']['value'],'effect'], 
+                y = table.loc[table['direction'] ==  plot_meta['upper_trace']['value'],'original'].values, 
                 base = table['baseline_prediction'].values[0], 
-                marker = dict(color = 'blue'), 
-                hovertemplate = 'Prediction: %{x}<br>Feature value: %{y}',
-                name =  plot_meta['lower_trace']['name'], orientation='h')
-
-    # add effects that pushes the score to normal state
-    fig.add_bar(x = table.loc[table.direction == plot_meta['upper_trace']['value'],'effect'], 
-                y = table.loc[table.direction == plot_meta['upper_trace']['value'],'original'].values, 
-                base = table['baseline_prediction'].values[0],
-                marker = dict(color = 'red'),
+                marker = dict(color = 'red'), 
                 hovertemplate = 'Prediction: %{x}<br>Feature value: %{y}',
                 name =  plot_meta['upper_trace']['name'], orientation='h')
 
+    # add effects that pushes the score to normal state
+    fig.add_bar(x = table.loc[table['direction'] == plot_meta['lower_trace']['value'],'effect'], 
+                y = table.loc[table['direction'] == plot_meta['lower_trace']['value'],'original'].values, 
+                base = table['baseline_prediction'].values[0],
+                marker = dict(color = 'blue'),
+                hovertemplate = 'Prediction: %{x}<br>Feature value: %{y}',
+                name =  plot_meta['lower_trace']['name'], orientation='h')
+
     # add a line that marks the actual state
-    fig.add_scatter(y = [ table['original'].values[0]*0.9 ,table['original'].values[-1]*1.05 ],
+    fig.add_scatter(y = [ table['original'].min()*0.9 ,table['original'].max()*1.05 ],
                     x = [ actual_score,actual_score ], 
                     mode ='lines', 
                     hovertemplate = 'Actual '+ 'score' if task in ['ad','anomaly detection'] else 'prediction',
@@ -184,8 +184,8 @@ def feature_exploration_plot(table, feature, task):
     
     # add a line that marks the thresholds for state changing
     if task in ['ad','anomaly detection']:
-        fig.add_scatter( y = [ table['original'].values[0]*0.9, table['original'].values[-1]*1.05 ],
-                         x = [ 0,0 ], 
+        fig.add_scatter( y = [ table['original'].min()*0.9, table['original'].max()*1.05 ],
+                         x = [ 0.5,0.5 ], 
                          mode='lines',
                          
                          hovertemplate = 'Changepoint',
