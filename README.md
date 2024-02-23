@@ -225,7 +225,7 @@ Expose the baseline vector used for AcME
 
 ```python
 acme_reg = ACME(model, 'target', K=50)
-acme_reg = acme_reg.fit(dataset) 
+acme_reg = acme_reg.explain(dataset) 
 ```
 
 ```python
@@ -265,7 +265,7 @@ array([0, 1])
 
 ```python
 acme_class = ACME(model, 'target', K=50, task = 'class', label_class = 1 )
-acme_class = acme_class.fit(dataset) 
+acme_class = acme_class.explain(dataset) 
 ```
 
 ![ACME class plot](image/readme/class.png)
@@ -274,7 +274,7 @@ acme_class = acme_class.fit(dataset)
 <br>
 
 <details>
-    <summary><b>  SCORE FUNCTION</b></summary>
+    <summary><b>  ANOMALI DETECTION with SCORE FUNCTION</b></summary>
 The model in this case is an isolation forest model
 
 ```python
@@ -284,11 +284,11 @@ def score_function(model, data):
         df = model.decision_function(data)
     except: # for local
         df = model.decision_function(data.reshape(1,-1))
+    
+    return (-1*df+1)/2
 
-    return -1*df
-
-acme_ifo = ACME(ifo, 'AD_score', K=50, task='regression', score_function=score_function, features=features)
-acme_ifo = acme_ifo.fit(dataset, robust = True)
+acme_ifo = ACME(ifo, 'AD_score', K=50, task='ad', score_function=score_function, features=features)
+acme_ifo = acme_ifo.explain(dataset, robust = True)
 
 ```
 

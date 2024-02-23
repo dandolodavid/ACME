@@ -16,7 +16,8 @@ def compute_baseline_predictions(model, baseline, task, score_function, class_to
     '''
     if score_function:
         # if the score function is available
-        baseline_pred = score_function( model, baseline.values)[0]
+        baseline = np.array(baseline.values, dtype=np.float64)
+        baseline_pred = score_function( model, baseline)[0]
         
     elif task in ['r','reg','regression'] or task in ['ad','anomaly detection']:
         # baseline prediction
@@ -38,7 +39,9 @@ def compute_predictions(model, Z, features, task, score_function, class_to_analy
     '''
     if score_function:
         # if the score function is available
-        predictions = score_function( model, Z.drop(columns='quantile')[features].values )
+        matrix_Z = np.array(Z.drop(columns='quantile')[features].values, dtype=np.float64)
+        predictions = score_function(model, matrix_Z)
+        # predictions = score_function( model, Z.drop(columns='quantile')[features].values )
         
     elif task in ['r','reg','regression'] or task in ['ad','anomaly detection']:
         # prediciton

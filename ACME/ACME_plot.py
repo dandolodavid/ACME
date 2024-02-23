@@ -158,7 +158,8 @@ def feature_exploration_plot(table, feature, task):
                 base = table['baseline_prediction'].values[0], 
                 marker = dict(color = 'red'), 
                 hovertemplate = 'Prediction: %{x}<br>Feature value: %{y}',
-                name =  plot_meta['upper_trace']['name'], orientation='h')
+                name =  plot_meta['upper_trace']['name'], orientation='h',
+                width=0.008)
 
     # add effects that pushes the score to normal state
     fig.add_bar(x = table.loc[table['direction'] == plot_meta['lower_trace']['value'],'effect'], 
@@ -166,7 +167,8 @@ def feature_exploration_plot(table, feature, task):
                 base = table['baseline_prediction'].values[0],
                 marker = dict(color = 'blue'),
                 hovertemplate = 'Prediction: %{x}<br>Feature value: %{y}',
-                name =  plot_meta['lower_trace']['name'], orientation='h')
+                name =  plot_meta['lower_trace']['name'], orientation='h', 
+                width=0.008)
 
     # add a line that marks the actual state
     fig.add_scatter(y = [ table['original'].min()*0.9 ,table['original'].max()*1.05 ],

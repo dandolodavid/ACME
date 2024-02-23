@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 from ACME.ACME_plot import ACME_summary_plot, feature_exploration_plot
 
+TOL = 1e-6
+
 def build_anomaly_detection_feature_exploration_table(local_table, feature):
     '''
     Params:
@@ -50,7 +52,7 @@ def computeAnomalyDetectionImportance(local_table, weights={}):
     importance = {}
 
     if len(weights.keys())==4:
-        if not sum(list(weights.values())) == 1:
+        if not abs(sum(list(weights.values()))-1) < TOL: 
             raise AttributeError('weights value must sum to 1')
     else:
         print('Using default weights for anomaly detection feature importance')
@@ -84,7 +86,7 @@ def computeAnomalyDetectionImportance(local_table, weights={}):
         delta = np.abs( max_score - min_score )
 
         #ratio 
-        ratio = local_score - min_score
+        ratio = (local_score - min_score)/(delta+1e-8)
         
         # change
         if min_score<0.5 and max_score>=0.5:

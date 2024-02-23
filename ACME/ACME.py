@@ -44,6 +44,7 @@ class ACME():
         self._score_function = score_function
         self._class_to_analyze = None
         self._label_class = None
+        self._sum_local_scores = pd.Series(0, index=self._features)
 
     def explain(self, dataframe, robust = False, label_class = None):    
         '''
@@ -68,8 +69,8 @@ class ACME():
             if self._cat_features == [] :
                 self._numeric_features = dataframe.drop(columns= [self._target]).columns.to_list()
             else:
-                self._numeric_features = dataframe.drop(columns= [self._target] + self._cat_features ).columns.to_list()
-
+                # self._numeric_features = dataframe.drop(columns= [self._target] + self._cat_features ).columns.to_list() 
+                self._numeric_features = list(set(self._features) - set(self._cat_features))
         self._numeric_df = dataframe[ self._numeric_features ].copy()
         
         # create the dataframe for cat feature
@@ -150,10 +151,6 @@ class ACME():
                                 'baseline_pred':baseline_pred,
                                 'baseline':baseline,
                                 }
-        #self._global_meta = feature_table.copy()
-        #self._global_feature_importance = importance_table.sort_values('importance', ascending = False).copy()
-        #self._global_baseline_pred = baseline_pred
-        #self._global_baseline = baseline
         self._perc_functions = perc_functions
 
         return self
@@ -213,14 +210,9 @@ class ACME():
                                 'baseline':local_baseline,
                                 'local_name':series.name}  # save the index of the local observation, it's the name of the series (corrisponding to the dataframe index)
 
-        #self._local_meta = local_table
-        #self._local_baseline = local_baseline
-        #self._local_importance_table = local_importance_table
-        #self._local_baseline_pred = local_baseline_pred
-
         return self
 
-    def feature_importance(self, local=False, weights = {}):
+    def feature_importance(self, local=False, weights = {}, sum_local=False):
         '''
         Returns the feature importance calculated by AcME.
         In case of Anomaly Detection task, it provides ad hoc explanation for anomaly detection, studied for local interpretability.
@@ -240,6 +232,8 @@ class ACME():
                 importance of the possibility to change prediction
             * delta : float
                 importance of the score delta
+        - sum_local : bool
+            if true and task is 'ad', the local importance score will be added to compute the global importance score
 
         Return : 
         -------
@@ -252,16 +246,27 @@ class ACME():
 
             local_table = self._local_explain['meta'].drop(columns='size').copy()
             importance_df = computeAnomalyDetectionImportance(local_table, weights = weights)   
+
+            if sum_local:
+                self._sum_local_scores = self._sum_local_scores.add(importance_df['importance'])
         
             return importance_df
 
-        # if local then we return the local importance
-        elif local:
+        # if local and not anomaly detection then we return the local importance
+        elif self._task not in ['ad','anomaly detection'] and local:
             return self._local_explain['feature_importance']
 
         # else simply return the importance calculated by acme for global explain
         else:
             return self._global_explain['feature_importance']
+
+    def reset_local_sum_importance(self):
+        '''
+        Reset the local_score_sum.
+        This could be helpfull when you have to analysie multiple cluster of anomalies.
+        Instead of fitting multiple acme object you can analyze one lcuster, then reset the score and analyze another cluster
+        '''
+        self._sum_local_scores = pd.Series(0, index=self._features)
 
     def feature_exploration(self, feature, local=False, plot=False):
         '''
@@ -386,6 +391,9 @@ class ACME():
         if local:
             table = self._local_explain['feature_importance']
             title = 'Local importance observation ID: ' + str(self._local_explain['local_name']) + '.<br>'+title
+        elif self._task in ['ad', 'anomaly detection']:
+            table = self._sum_local_scores.sort_values(ascending=False)
+            table = pd.DataFrame(table).rename(columns={0:'importance'})
         else:
             table = self._global_explain['feature_importance']
 
