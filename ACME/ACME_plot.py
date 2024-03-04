@@ -77,7 +77,7 @@ def ACME_summary_plot(plot_df, meta):
         color_local = 'black'
     
     # draw plot
-    fig = px.scatter(round(plot_df,3), 
+    fig = px.scatter(round(plot_df,4), 
                         x = 'predict' if meta['local'] else 'effect', 
                         y = 'feature', 
                         color = 'quantile', size = 'size' if meta['local'] else None, 
