@@ -304,7 +304,7 @@ class ACME():
         else:
             return feature_table
 
-    def summary_plot(self, local=False, weights = {}):
+    def summary_plot(self, local=False, weights = {}, n_features : int = None):
         '''
         Generate the recap plot
 
@@ -322,7 +322,9 @@ class ACME():
                     importance of the possibility to change prediction
                 * delta : float
                     importance of the score delta
-        
+        - n_features : int 
+            Plot only the most important n_features features in the plot
+
         Returns:
         --------
         - plotly figure
@@ -359,7 +361,13 @@ class ACME():
                 meta['local'] = False
 
             # prepare for the plotting
-            plot_df = table.sort_values(['importance','quantile']).reset_index().rename(columns={'index':'feature'}).copy()
+            ordered_blocks = pd.DataFrame()
+            for _, group in table.groupby('feature'): 
+                sorted_group = group.sort_values('quantile')
+                ordered_blocks = pd.concat([ordered_blocks, sorted_group])
+            plot_df = ordered_blocks.sort_values('importance', ascending=True).reset_index().rename(columns={'index':'feature'}).copy()
+            
+            # plot_df = table.sort_values(['importance','quantile']).reset_index().rename(columns={'index':'feature'}).copy()
 
             # if local set the refering x to the local values observation
             # for the global set to 0
@@ -368,6 +376,11 @@ class ACME():
             else: 
                 meta['x'] = 0
 
+            # group feature by 'feature' and then take the last n_features group
+            if local and n_features is not None:
+                features_to_consider = plot_df['feature'].unique()[-n_features:]
+                plot_df = plot_df[plot_df['feature'].isin(features_to_consider)]
+                
             # set the top and the bottom of the y-axis (first and last feature)
             meta['y_bottom'] = plot_df['feature'].values[0]
             meta['y_top'] = plot_df['feature'].values[len(plot_df)-1]
