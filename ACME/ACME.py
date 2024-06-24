@@ -362,9 +362,12 @@ class ACME():
 
             # prepare for the plotting
             ordered_blocks = pd.DataFrame()
+            
+            table.index.name = 'feature'
             for _, group in table.groupby('feature'): 
                 sorted_group = group.sort_values('quantile')
                 ordered_blocks = pd.concat([ordered_blocks, sorted_group])
+    
             plot_df = ordered_blocks.sort_values('importance', ascending=True).reset_index().rename(columns={'index':'feature'}).copy()
             
             # plot_df = table.sort_values(['importance','quantile']).reset_index().rename(columns={'index':'feature'}).copy()
@@ -384,7 +387,7 @@ class ACME():
             # set the top and the bottom of the y-axis (first and last feature)
             meta['y_bottom'] = plot_df['feature'].values[0]
             meta['y_top'] = plot_df['feature'].values[len(plot_df)-1]
-
+            
             # generate the plot
             fig = ACME_summary_plot(plot_df, meta)
         

@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from ACME.ACME_plot import ACME_summary_plot, feature_exploration_plot
-
+pd.options.mode.chained_assignment = None
 TOL = 1e-6
 
 def build_anomaly_detection_feature_exploration_table(local_table, feature):
@@ -66,7 +66,7 @@ def computeAnomalyDetectionImportance(local_table, weights={}):
         
         importance[feature] = {}
 
-        tmp = local_table.loc[feature]
+        tmp = local_table.loc[feature].copy()
 
         # search when the sign changes
         tmp['state_pred_change'] = (np.sign(tmp['baseline_prediction']*2-1) != np.sign(tmp['predict']*2-1)).astype(int)
