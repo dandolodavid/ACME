@@ -380,7 +380,7 @@ class ACME():
                 meta['x'] = 0
 
             # group feature by 'feature' and then take the last n_features group
-            if local and n_features is not None:
+            if n_features is not None:
                 features_to_consider = plot_df['feature'].unique()[-n_features:]
                 plot_df = plot_df[plot_df['feature'].isin(features_to_consider)]
                 
