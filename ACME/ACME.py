@@ -259,7 +259,15 @@ class ACME():
         # else simply return the importance calculated by acme for global explain
         else:
             return self._global_explain['feature_importance']
-
+    
+    def sum_local_scores(self,dataframe):
+        '''
+        '''
+        for idx in dataframe.index:
+            tmp = self.explain_local(dataframe.loc[idx,self._features])
+            tmp.feature_importance(local=True,sum_local=True)
+            
+    
     def reset_local_sum_importance(self):
         '''
         Reset the local_score_sum.
@@ -393,7 +401,7 @@ class ACME():
         
         return fig
 
-    def bar_plot(self, local=False):
+    def bar_plot(self, local=False, n_features = None):
         '''
         Feature importance plot
         '''
@@ -408,12 +416,20 @@ class ACME():
             table = self._local_explain['feature_importance']
             title = 'Local importance observation ID: ' + str(self._local_explain['local_name']) + '.<br>'+title
         elif self._task in ['ad', 'anomaly detection']:
-            table = self._sum_local_scores.sort_values(ascending=False)
-            table = pd.DataFrame(table).rename(columns={0:'importance'})
+            if self._sum_local_scores.sum()>0:
+                table = self._sum_local_scores.sort_values(ascending=False)
+                table = pd.DataFrame(table).rename(columns={0:'importance'})
+            else:
+                print('Sum local scores is 0, default global importance is used')
+                table = self._global_explain['feature_importance']
         else:
             table = self._global_explain['feature_importance']
-
+        
+        
         table = round(table.reset_index().sort_values('importance').rename(columns={'index':'feature'}),3)
+        if n_features:
+            table = table.tail(n_features)    
+        
         fig = px.bar(table, 
                     x='importance',
                     y='feature', 
