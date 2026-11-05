@@ -157,6 +157,8 @@ class ACME():
                                 'baseline':baseline,
                                 }
         self._perc_functions = perc_functions
+        # features are only known for sure now (they may not have been given at init)
+        self.reset_local_sum_importance()
 
         return self
 
