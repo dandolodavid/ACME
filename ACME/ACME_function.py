@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 from functools import partial
-from ACME.utils import most_frequent
 
 
 def _percentileofscore(dataframe, feature):
@@ -24,12 +23,6 @@ def compute_baseline_predictions(model, baseline, task, score_function, class_to
         baseline_pred = model.predict(baseline.values)[0]
         
     elif task in ['c','class','classification']:
-        # mean prediction
-        try:
-            if len(baseline_pred) == 2:
-                baseline_pred = baseline_pred[0]
-        except:
-            pass   
         baseline_pred =  model.predict_proba(baseline.values)[0][class_to_analyze]
 
     return baseline_pred
@@ -46,18 +39,13 @@ def compute_predictions(model, Z, features, task, score_function, class_to_analy
     elif task in ['r','reg','regression'] or task in ['ad','anomaly detection']:
         # prediciton
         predictions = model.predict(Z.drop(columns='quantile')[features].values)
-        try:
-            if predictions.shape[1] == 2:
-                predictions = predictions[:,0]
-        except:
-            pass
+        if np.ndim(predictions) == 2 and predictions.shape[1] == 2:
+            predictions = predictions[:,0]
         
     elif task in ['c','class','classification']:
         # prediciton
-        try:
-            predictions = model.predict_proba(Z.drop(columns='quantile')[features].values)[:,class_to_analyze]
-        except:
-            predictions = model.predict_proba(Z.drop(columns='quantile')[features].values)[class_to_analyze]
+        # asarray also covers models whose predict_proba returns a DataFrame
+        predictions = np.asarray(model.predict_proba(Z.drop(columns='quantile')[features].values))[:,class_to_analyze]
 
     return predictions
 
@@ -148,7 +136,8 @@ def create_level_variable_matrix(dataframe, feature):
     '''
     
     x_j_k = np.unique(dataframe[feature].to_list())
-    x_most_freq = dataframe.apply(lambda x: most_frequent(x),axis=0)
+    # same tie-break as the categorical baseline in computeACME
+    x_most_freq = dataframe.mode().iloc[0]
     
     Z = pd.DataFrame( x_most_freq ).T
     Z = pd.concat([Z]*len(x_j_k), ignore_index=True)
@@ -177,6 +166,8 @@ def nearest_quantile(dataframe, local_value, cat_features):
     original_list = dataframe['original'].unique()
     if cat_features:
         quantile = dataframe.loc[ dataframe['original'] == local_value,  'quantile']
+        if len(quantile) == 0:
+            raise ValueError('categorical value ' + str(local_value) + ' was not seen in the data passed to explain()')
     else:
         quantile = dataframe.loc[ dataframe['original'] == original_list[np.argmin(np.abs(original_list - local_value))],  'quantile']
     
@@ -250,7 +241,8 @@ def computeACME(model, features, numeric_df, cat_df, task, K, robust = False, cl
             numeric_baseline = pd.DataFrame()
         # if there are categoric features take the mode, else set to an empty df
         if len(cat_features) > 0:
-            cat_baseline = cat_df.mode()
+            # mode() returns one row per tied mode: keep only the first
+            cat_baseline = cat_df.mode().iloc[[0]]
         else : 
             cat_baseline = pd.DataFrame()
         
@@ -333,7 +325,9 @@ def predictACME(model, series, features, percentile_functions, meta_table, task,
     baseline_pred = compute_baseline_predictions(model=model, baseline=baseline, task=task, score_function=score_function, class_to_analyze=class_to_analyze)
     
     # take the necessary info from the table
-    predict_meta_table = meta_table[['original','quantile','type_feature','importance']].copy()
+    # the quantile grid depends only on the data: a multiclass meta table repeats it once per class
+    grid = meta_table[['original','quantile','type_feature']]
+    predict_meta_table = grid[~grid.reset_index().duplicated().values].copy()
     
     # prepare containers
     Z_list = []

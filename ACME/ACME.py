@@ -7,6 +7,13 @@ from ACME.ACME_anomaly_detection import build_anomaly_detection_feature_explorat
 import plotly.express as px
 import plotly.graph_objects as go
 
+def _class_index(class_map, label_class):
+    '''Position of label_class in model.classes_, compared as strings so that 1 and '1' match.'''
+    match = np.where(class_map.astype(str) == str(label_class))[0]
+    if len(match) > 0:
+        return match[0]
+    raise ValueError('label_class ' + repr(label_class) + ' not found in model.classes_ ' + str(class_map.tolist()))
+
 class ACME():
     
     def __init__(self, model, target, features=[], cat_features=[], K=50, task='regression', score_function=None):
@@ -69,8 +76,9 @@ class ACME():
             if self._cat_features == [] :
                 self._numeric_features = dataframe.drop(columns= [self._target]).columns.to_list()
             else:
-                # self._numeric_features = dataframe.drop(columns= [self._target] + self._cat_features ).columns.to_list() 
-                self._numeric_features = list(set(self._features) - set(self._cat_features))
+                # numeric features = all candidate features that are not categorical
+                candidates = self._features if self._features else dataframe.drop(columns=[self._target]).columns.to_list()
+                self._numeric_features = [f for f in candidates if f not in self._cat_features]
         self._numeric_df = dataframe[ self._numeric_features ].copy()
         
         # create the dataframe for cat feature
@@ -78,8 +86,12 @@ class ACME():
         if not self._cat_features == []:
            self._cat_df = dataframe[ self._cat_features ].copy()
 
-        # we save the features used by the model in the original order (necessary to correctly compute the predictiom)
-        self._features = clean_list( dataframe.columns.to_list(), self._numeric_features + self._cat_features)
+        # the model input order is the user's `features` list; fall back to the dataframe order only when it was not given
+        if not self._features:
+            self._features = clean_list( dataframe.columns.to_list(), self._numeric_features + self._cat_features)
+        missing = set(self._features) - set(dataframe.columns)
+        if missing:
+            raise ValueError('features not found in dataframe: ' + str(sorted(missing)))
 
         # if the label class is given, find the corrispective position in the model class map
         # else auto set as label class the first class
@@ -87,10 +99,7 @@ class ACME():
         if self._task  in ['c','class','classification']:
             class_map = np.array(self._model.classes_)
             if label_class is not None:
-                try:
-                    class_to_analyze = np.where(class_map == label_class)[0][0]
-                except:
-                    class_to_analyze = np.where(class_map == str(label_class))[0][0]
+                class_to_analyze = _class_index(class_map, label_class)
                 self._class_to_analyze = class_to_analyze
             if label_class is None:
                 label_class = list(class_map)
@@ -152,6 +161,8 @@ class ACME():
                                 'baseline':baseline,
                                 }
         self._perc_functions = perc_functions
+        # features are only known for sure now (they may not have been given at init)
+        self.reset_local_sum_importance()
 
         return self
 
@@ -176,30 +187,25 @@ class ACME():
         if len(self._global_explain.keys())==0:
             raise InterruptedError("You must first fit the acme explaination model with the 'explain' command on the same data used to train the model")
 
+        # local class state is kept in self._local_explain, so the global explanation is not altered
+        class_to_analyze = self._class_to_analyze
         if self._task  in ['c','class','classification']:
             class_map = np.array(self._model.classes_)
             if label_class is not None:
-                try:
-                    class_to_analyze = np.where(class_map == label_class)[0][0]
-                except:
-                    class_to_analyze = np.where(class_map == str(label_class))[0][0]
+                class_to_analyze = _class_index(class_map, label_class)
             else:
                 class_to_analyze = 0
                 label_class = class_map[class_to_analyze]
                 print('WARNING: in local interpretation, the label_class must be specified and not None. To default it\'s setted to class:' + str(class_map[0]))
 
-            # save the class to analize and the label
-            self._class_to_analyze = class_to_analyze
-            self._label_class = label_class
-
-        local_table, local_importance_table, local_baseline_pred, local_baseline = predictACME(model=self._model, 
+        local_table, local_importance_table, local_baseline_pred, local_baseline = predictACME(model=self._model,
                     series=series,
                     features=self._features,
                     meta_table=self._global_explain['meta'],
                     percentile_functions=self._perc_functions,
-                    task=self._task, 
-                    score_function=self._score_function, 
-                    class_to_analyze=self._class_to_analyze)
+                    task=self._task,
+                    score_function=self._score_function,
+                    class_to_analyze=class_to_analyze)
         
         if self._task in ['c','class','classification']:
             local_table['class'] = local_table['class'].map({class_to_analyze : class_map[class_to_analyze]})
@@ -208,6 +214,7 @@ class ACME():
                                 'feature_importance':local_importance_table.sort_values('importance', ascending = False).copy(),
                                 'baseline_pred':local_baseline_pred,
                                 'baseline':local_baseline,
+                                'label_class':label_class,
                                 'local_name':series.name}  # save the index of the local observation, it's the name of the series (corrisponding to the dataframe index)
 
         return self
@@ -349,7 +356,7 @@ class ACME():
             meta['local'] = False
 
             if self._task  in ['c','class','classification']:
-                meta['label_class'] = self._label_class
+                meta['label_class'] = self._local_explain['label_class'] if local else self._label_class
                 meta['local'] = False
                 
             if local:

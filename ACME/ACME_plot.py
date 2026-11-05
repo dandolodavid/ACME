@@ -72,7 +72,7 @@ def ACME_summary_plot(plot_df, meta):
 
     #set the color for the local score line
     if meta['local'] and (meta['task'] in ['ad','anomaly detection']):
-        color_local = 'red' if meta['x'] > 0 else 'blue' 
+        color_local = 'red' if meta['x'] >= 0.5 else 'blue'
     else:
         color_local = 'black'
     
@@ -95,7 +95,7 @@ def ACME_summary_plot(plot_df, meta):
                                 dash = 'dash')
                     )]
     # if anomaly detection add a line that marks the thresholds for state changing
-    if meta['task'] in meta['task'] in ['ad','anomaly detection'] and meta['local']:
+    if meta['task'] in ['ad','anomaly detection'] and meta['local']:
         shapes = shapes + [dict( 
                                     type='line', 
                                     x0 = 0.5, y0 = y_bottom, 
@@ -170,8 +170,13 @@ def feature_exploration_plot(table, feature, task):
                 name =  plot_meta['lower_trace']['name'], orientation='h', 
                 width=0.008)
 
+    # vertical extent of the reference lines: data range plus a 5% margin (multiplying would shrink it for negative values)
+    y_min, y_max = table['original'].min(), table['original'].max()
+    y_pad = 0.05 * (y_max - y_min)
+    y_line = [y_min - y_pad, y_max + y_pad]
+
     # add a line that marks the actual state
-    fig.add_scatter(y = [ table['original'].min()*0.9 ,table['original'].max()*1.05 ],
+    fig.add_scatter(y = y_line,
                     x = [ actual_score,actual_score ], 
                     mode ='lines', 
                     hovertemplate = 'Actual '+ 'score' if task in ['ad','anomaly detection'] else 'prediction',
@@ -186,7 +191,7 @@ def feature_exploration_plot(table, feature, task):
     
     # add a line that marks the thresholds for state changing
     if task in ['ad','anomaly detection']:
-        fig.add_scatter( y = [ table['original'].min()*0.9, table['original'].max()*1.05 ],
+        fig.add_scatter( y = y_line,
                          x = [ 0.5,0.5 ], 
                          mode='lines',
                          
