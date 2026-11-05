@@ -69,8 +69,9 @@ class ACME():
             if self._cat_features == [] :
                 self._numeric_features = dataframe.drop(columns= [self._target]).columns.to_list()
             else:
-                # self._numeric_features = dataframe.drop(columns= [self._target] + self._cat_features ).columns.to_list() 
-                self._numeric_features = list(set(self._features) - set(self._cat_features))
+                # numeric features = all candidate features that are not categorical
+                candidates = self._features if self._features else dataframe.drop(columns=[self._target]).columns.to_list()
+                self._numeric_features = [f for f in candidates if f not in self._cat_features]
         self._numeric_df = dataframe[ self._numeric_features ].copy()
         
         # create the dataframe for cat feature
