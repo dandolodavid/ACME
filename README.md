@@ -1,222 +1,344 @@
 # ACME
 ACME - Accelerated Model Explainability
 
-In this paper (https://www.sciencedirect.com/science/article/abs/pii/S0957417422021339) we propose ACME a simple procedure that studies the model behavior observing the changes in the model predictions' caused by using different quantiles of each variable used by the model.
-To evaluate the impact of the predictions' changing, we introduce a new measure, named _standardize effect_, that keeps in count both the changing direction and the overall variable impact amplitude. Standardize effects are also used to compute the final scores that represent the importance of the features. 
+ACME is a fast, model-agnostic explainability tool for machine learning models trained on **tabular data**. It answers two questions:
 
-We tested the procedure and we compare the results with the know model interpretability algorithm SHAP. The results of the procedure are very similar, both in term of results that in term of visualization, but considering the speed, ACME outperform SHAP in every situation, proving to be a very usable algorithm, in particular in prediction applications where time efficiency is crucial.
+- **Global**: which features matter most to the model, and in which direction they push the prediction?
+- **Local**: for a single observation, which features drive its prediction, and what would happen if we changed them ("what if" scenarios)?
 
-Moreover, the algorithm presents the possibility to study a single observation prediction, giving a local perspective to how the model works, using a "what if" scenario to take real-time decisions.
+Paper: [AcME—Accelerated model-agnostic explanations: Fast whitening of the machine-learning black box](https://www.sciencedirect.com/science/article/abs/pii/S0957417422021339) (Expert Systems with Applications).
 
-<b> Info </b>
+ACME produces explanations very similar to SHAP, both in results and in visualization, but is much faster, which makes it well suited to applications where time efficiency is crucial.
 
-Actually ACME works with __TABULAR DATA__ and model with task:
+## How it works
 
-- __regression__ :  the input model must have _predict_ function
-- __classification__ : the input model must have _predict_proba_ function
-- __anomaly detection__ : acme has some optimization to study anomaly detection task, but require to provide a _score_function_ with <i>0 < score < 1</i> where:
-    - 0 : full normal
-    - 1 : full anomaly
-    - changepoint is at 0.5
-- __all models__ : if a _score function_ is specified during the initialization
+ACME studies how the model reacts when one feature at a time moves across its distribution, while all the others are held fixed.
 
-## INSTALL 
-Install with the command:
+1. **Baseline**: build a reference point from the data. For numeric features this is the mean, and for categorical features it is the mode. In local mode, the baseline is the observation being explained.
+2. **Quantile perturbation**: for each feature, build `K` copies of the baseline in which only that feature is replaced by its quantiles, from 0 to 1 (or from 0.05 to 0.95 with `robust=True`). Categorical features are replaced by each of their levels.
+3. **Predict**: score all the perturbed rows with the model (`predict`, `predict_proba` or a custom `score_function`). The cost is roughly `n_features × K` predictions, which is what makes ACME fast.
+4. **Standardized effect**: for each perturbed row, `effect = prediction − baseline_prediction`. The effects are then standardized and rescaled by the feature's prediction range. This keeps both the **direction** of the change and the **amplitude** of the feature's overall impact.
+5. **Importance**: a feature's importance is the mean absolute standardized effect over its quantiles.
 
-```pip install statwolfACME```
+### Anomaly detection importance
 
-## ACME PACKAGE
+For anomaly detection, the model's score must lie in `[0, 1]`, where `0` means fully normal, `1` means fully anomalous, and the decision threshold is `0.5`. Local importance is then a weighted combination of four sub-scores, computed by perturbing each feature of the observation:
+
+| Sub-score | Meaning |
+|---|---|
+| `delta` | range of anomaly scores reachable by changing only this feature |
+| `ratio` | where the current score lies inside that range |
+| `change` | `1` if changing this feature can flip the prediction (normal ↔ anomaly), else `0` |
+| `distance` | how many quantiles away the flip happens (the closer, the more important) |
+
+The default weights are `{'ratio': 0.2, 'distance': 0.2, 'change': 0.3, 'delta': 0.3}`.
+
+## Supported tasks
+
+| `task` | Model requirement |
+|---|---|
+| `'regression'` / `'reg'` / `'r'` | `model.predict(X)` |
+| `'classification'` / `'class'` / `'c'` | `model.predict_proba(X)` and `model.classes_` |
+| `'anomaly detection'` / `'ad'` | a `score_function` returning a score in `[0, 1]` (0 = normal, 1 = anomaly, threshold at 0.5) |
+| any task | when a `score_function(model, X)` is given, it is used instead of `predict` / `predict_proba` |
+
+`X` is passed to the model as a **NumPy array** with columns in the order of `features`.
+
+## Install
+
+```bash
+pip install statwolfACME
+```
+
+## API
+
+```python
+from ACME.ACME import ACME
+```
+
+All methods that fit something (`explain`, `explain_local`) return `self`, so calls can be chained. Every method that has a `local` parameter works on the **global** explanation by default. With `local=True`, it uses the last observation passed to `explain_local`.
 
 <details>
-  <summary><b>ACME( model, target, features = [], cat_features = [], K = 50, task = 'regression', score_function = None )</b></summary>
-  Initialization
+  <summary><b>ACME(model, target, features=[], cat_features=[], K=50, task='regression', score_function=None)</b></summary>
+
+Initialization.
 
     Params:
 
-    - model: object
-
-        the model object, it must have the *predict* method or the ad-hoc parameter *score_function* is required
+    - model : object
+        the trained model. It must have `predict` (regression) or `predict_proba` (classification),
+        unless a `score_function` is given
 
     - target : str
+        name of the target column in the dataframe passed to `explain`. Typically it is the model
+        prediction (regression and classification). With a score function it can be any score column
+        (e.g. the anomaly score in anomaly detection). This column is excluded from the features
 
-        column name with the target features. Typically, it is the predicted features (regression and classification), while using the score function could be a particular column (example: in Anomaly detection, the column with the anomaly score)
-
-    - features :  [str]
-
-        list of string with the columns name for all the model features (given in the same order of the model)
+    - features : [str]
+        names of all the model features, in the SAME ORDER as the model input
 
     - cat_features : [str]
+        names of the categorical features (a subset of `features`)
 
-        list of string with the columns name for categorical features
+    - K : int (default 50)
+        number of quantiles used for each numeric feature. Higher K means a finer grid and more predictions
 
-    - K : int
+    - task : str (default 'regression')
+        one of {'regression','reg','r', 'classification','class','c', 'anomaly detection','ad'}
 
-        number of quantile used in the AcME procedure
-    - task :  str
-
-        str with accepted values {'regression','reg','r','c','class','classification'}. It declares the task of the model. When score_function is not None, the parameters is not necessary
-
-    - score_function : function
-
-        function that has as first input the model and second the input data to realize the prediction. It must return a numeric score
+    - score_function : function(model, X) -> array (default None)
+        custom scoring function. It receives the model and a 2D numpy array and must return one numeric
+        score per row. Required for anomaly detection, where the score must be in [0, 1]
 
 </details>
 
 <br>
 
 <details>
-  <summary><b>ACME.explain(dataframe, robust = False, label_class = None)</b></summary>
+  <summary><b>ACME.explain(dataframe, robust=False, label_class=None)</b></summary>
 
-Fit the acme explainability.
+Fit the global explanation. Use the same data (or a representative sample of the data) the model was trained on.
 
     Params:
 
-    - dataframe: pd.DataFrame
+    - dataframe : pd.DataFrame
+        input data containing the features and the `target` column
 
-        input dataframe for the model
+    - robust : bool (default False)
+        if True use only quantiles in [0.05, 0.95], excluding possible outliers
 
-    - robust : bool
+    - label_class : str, int (default None)
+        classification only. The class to explain (a value in `model.classes_`).
+        If None, all the classes are explained, and the global summary plot becomes a stacked
+        bar plot with the importance per class
 
-        if True exclude the quantile under 0.05 and over 0.95 to remove possible outliers
+    Returns:
 
-    - label_class :
-
-        when task is classification, the label of the predicted class must be specified
+    - self
 
 </details>
 
 <br>
 
 <details>
-    <summary><b>ACME.explain_local(series, label_class = None)</b></summary>
+  <summary><b>ACME.explain_local(series, label_class=None)</b></summary>
 
-Explain the prediction on the given input observation.
+Explain the prediction of a single observation. `explain` must be called first, because the local explanation reuses the global quantile grid.
 
     Params:
 
     - series : pd.Series
-        
-        observation on which explain the prediction
+        the observation to explain, containing the features (e.g. `df.loc[idx, features]`).
+        Its name (the dataframe index) is shown in the local plots
 
-    - label_class : int,str
+    - label_class : str, int (default None)
+        classification only. The class to explain. If None, the first class in `model.classes_` is used
+        and a warning is printed
 
-        when task is classification, the label of the predicted class must be specified
+    Returns:
+
+    - self
 
 </details>
 
 <br>
 
 <details>
-    <summary><b>ACME.bar_plot(local=False)</b></summary>
+  <summary><b>ACME.feature_importance(local=False, weights={}, sum_local=False)</b></summary>
 
-Feature importance plot
-
-    Params: 
-
-    - local : bool
-
-        if True return the local bar plot of feature importance, else the global
-</details>
-
-<br>
-
-<details>
-    <summary><b>ACME.summary_plot(local=False)</b></summary>
-
-Generate the recap plot
-
-    Params: 
-
-    - local : bool
-
-        if True return the local summary plot, else the global
-</details>
-
-<br>
-
-<details>
-    <summary><b>ACME.feature_importance(local=False, weights = {})</b></summary>
-
-Returns the feature importance calculated by AcME.
-In case of Anomaly Detection task, it provides ad hoc explanation for anomaly detection, studied for local interpretability.
-The score will show what features can altered the prediction from normal to anomalies and viceversa.
+Return the feature importance table, sorted from the most to the least important feature.
+For anomaly detection with `local=True`, it returns the ad hoc anomaly detection importance, which shows which features can move the prediction from normal to anomaly and vice versa.
 
     Params:
 
-    - local : bool  
-            if true and task is AD, it return the local AD version of feature importance
+    - local : bool (default False)
+        if True return the importance of the last local explanation
 
-    - weights : dict
-        Dictionary with the importance for each element. Sum must be 1
-        - ratio : float
+    - weights : dict (default {})
+        anomaly detection only. Weights of the four sub-scores, which must sum to 1.
+        An empty dict uses the default weights; otherwise all four keys are required
+        - ratio : float      importance of the local score position
+        - distance : float   importance of the inter-quantile distance needed to change the prediction
+        - change : float     importance of the possibility to change the prediction
+        - delta : float      importance of the score delta
 
-            importance of local score position  
+    - sum_local : bool (default False)
+        anomaly detection only. If True, add this local importance to an accumulator,
+        used by `bar_plot()` to show the aggregated importance over many anomalies
 
-        - distance : float
+    Returns:
 
-            importance of inter-quantile distance necessary to change
+    - pd.DataFrame
+        index: feature, column `importance` (for local AD also `ratio`, `delta`, `change`,
+        `distance_to_change`, `min_score`, `max_score`, `local_score`)
 
-        - change : float
-
-            importance of the possibility to change prediction
-
-        - delta : float
-
-            importance of the score delta
 </details>
 
 <br>
 
 <details>
-    <summary><b>ACME.feature_exploration(feature, local=False, plot=False)</b></summary>
+  <summary><b>ACME.summary_plot(local=False, weights={}, n_features=None)</b></summary>
 
-Generate anomaly detection feature exploration table or a plot for local observation that, chosen a specific feature, shows how the prediction can change because of the feature.
+Generate the summary plot. Each row is a feature, sorted by importance. Each point is a quantile of that feature, and its x position is the standardized effect (or, for local plots, the prediction obtained with that quantile). The color is the quantile.
+
+    Params:
+
+    - local : bool (default False)
+        if True plot the local explanation, else the global one
+
+    - weights : dict (default {})
+        anomaly detection only, same as in `feature_importance`
+
+    - n_features : int (default None)
+        plot only the `n_features` most important features
+
+    Returns:
+
+    - plotly figure
+
+</details>
+
+<br>
+
+<details>
+  <summary><b>ACME.bar_plot(local=False, n_features=None)</b></summary>
+
+Horizontal bar plot of the feature importance.
+For anomaly detection with `local=False`, if local scores were accumulated (see `sum_local_scores`), the plot shows the aggregated local importance. Otherwise it shows the global importance.
+
+    Params:
+
+    - local : bool (default False)
+        if True plot the local importance, else the global one
+
+    - n_features : int (default None)
+        plot only the `n_features` most important features
+
+    Returns:
+
+    - plotly figure
+
+</details>
+
+<br>
+
+<details>
+  <summary><b>ACME.feature_exploration(feature, local=False, plot=False)</b></summary>
+
+Show how the prediction changes when the selected feature moves across its quantiles (a "what if" analysis).
+For anomaly detection, each quantile is also labelled `normal` or `anomalies` depending on whether the resulting score crosses 0.5.
 
     Params:
 
     - feature : str
+        name of the feature to explore
 
-        selected feature's name
-    
-    - plot : bool
-    
-        if true returns the plot, else returns the table
+    - local : bool (default False)
+        if True explore the local explanation, else the global one
 
-</details>
-<br>
+    - plot : bool (default False)
+        if True return a plotly figure, else return the table
 
-<details>
-    <summary><b>ACME.summary_table(local = False)</b></summary>
+    Returns:
 
-Expose the global or local summary table with all the info calculated by acme, like standardized effect, quantile with linked original values, etc. for global interpretability
+    - pd.DataFrame or plotly figure
 
-    Params:
-
-    - local : bool
-        if return the local or the global table
-
-    - fitted_acme.local_table()
-
-        return table with all the info calculated by acme, like standardized effect, quantile with linked original values, etc. for local interpretability
 </details>
 
 <br>
 
 <details>
-    <summary><b>ACME.baseline_values(local=False)</b></summary>
+  <summary><b>ACME.sum_local_scores(dataframe)</b> &nbsp;/&nbsp; <b>ACME.reset_local_sum_importance()</b></summary>
 
-Expose the baseline vector used for AcME
+Anomaly detection only. `sum_local_scores` runs `explain_local` and `feature_importance(local=True, sum_local=True)` on every row of `dataframe` and accumulates the local importance. `bar_plot()` then shows which features explain that group of anomalies.
+
+`reset_local_sum_importance` resets the accumulator, which is useful for analysing several clusters of anomalies with the same fitted object.
 
     Params:
 
-    - local : bool
-        if True expose the local baseline, else the global
+    - dataframe : pd.DataFrame
+        observations to explain (typically the detected anomalies). It must contain the features
 
 </details>
 
 <br>
 
-## 2) EXAMPLES
+<details>
+  <summary><b>ACME.summary_table(local=False)</b></summary>
+
+Return the global or local table with everything computed by ACME, with one row per (feature, quantile).
+
+    Columns:
+
+    - effect               standardized effect
+    - predict              prediction with the feature set to that quantile
+    - baseline_prediction  prediction on the baseline
+    - original             original value of the feature at that quantile
+    - quantile             quantile in [0, 1]
+    - type_feature         'numeric' or 'categorical'
+    - baseline_quantile    quantile of the baseline value
+    - importance           feature importance
+    - class                classification only
+
+</details>
+
+<br>
+
+<details>
+  <summary><b>ACME.baseline_values(local=False)</b></summary>
+
+Return the baseline used by ACME: the mean/mode vector (global) or the explained observation (local).
+
+    Params:
+
+    - local : bool (default False)
+        if True return the local baseline, else the global one
+
+</details>
+
+<br>
+
+<details>
+  <summary><b>ACME.metadata()</b></summary>
+
+Return a dict with the model, the target, the features, the task, K, the score function, and the raw global and local explanations.
+
+</details>
+
+<br>
+
+## Examples
+
+### Full example (regression)
+
+```python
+from sklearn.datasets import load_diabetes
+from sklearn.ensemble import RandomForestRegressor
+from ACME.ACME import ACME
+
+X, y = load_diabetes(return_X_y=True, as_frame=True)
+features = X.columns.to_list()
+model = RandomForestRegressor(random_state=0).fit(X, y)
+
+# the target column is the model prediction
+dataset = X.copy()
+dataset['target'] = model.predict(X)
+
+# 1) global explanation
+acme = ACME(model, 'target', features=features, K=50)
+acme = acme.explain(dataset)
+
+acme.feature_importance()          # importance table
+acme.summary_plot().show()         # quantile/effect plot
+acme.bar_plot(n_features=5).show() # top 5 features
+acme.feature_exploration('bmi', plot=True).show()
+
+# 2) local explanation of observation 100
+acme.explain_local(dataset.loc[100, features])
+acme.feature_importance(local=True)
+acme.summary_plot(local=True).show()
+acme.summary_table(local=True)     # all the numbers behind the plot
+```
 
 <br>
 
@@ -224,8 +346,8 @@ Expose the baseline vector used for AcME
     <summary><b> REGRESSION </b></summary>
 
 ```python
-acme_reg = ACME(model, 'target', K=50)
-acme_reg = acme_reg.explain(dataset) 
+acme_reg = ACME(model, 'target', features=features, K=50)
+acme_reg = acme_reg.explain(dataset)
 ```
 
 ```python
@@ -243,8 +365,8 @@ acme_reg.bar_plot()
 <b>LOCAL</b>
 
 ```python
-acme_local = acme_reg.fit_local(dataset, local=100)
-acme_local.summary_plot(local=True)
+acme_reg.explain_local(dataset.loc[100, features])
+acme_reg.summary_plot(local=True)
 ```
 
 ![ACME local plot](image/readme/local.png)
@@ -256,7 +378,7 @@ acme_local.summary_plot(local=True)
 <details>
     <summary><b> CLASSIFICATION </b></summary>
 
-The classification acme version works as the regression, but requires to specify the class we are looking for explanation.
+Classification works like regression, but you specify the class to explain in `explain` / `explain_local`.
 
 ```python
 model.classes_
@@ -264,32 +386,65 @@ array([0, 1])
 ```
 
 ```python
-acme_class = ACME(model, 'target', K=50, task = 'class', label_class = 1 )
-acme_class = acme_class.explain(dataset) 
+acme_class = ACME(model, 'target', features=features, K=50, task='class')
+acme_class = acme_class.explain(dataset, label_class=1)
+acme_class.summary_plot()
 ```
 
 ![ACME class plot](image/readme/class.png)
+
+Without `label_class`, all the classes are explained and `summary_plot()` shows a stacked bar plot of the importance per class:
+
+```python
+acme_all = ACME(model, 'target', features=features, task='class').explain(dataset)
+acme_all.summary_plot()
+```
+
+Local:
+
+```python
+acme_class.explain_local(dataset.loc[10, features], label_class=1)
+acme_class.summary_plot(local=True)
+```
+
 </details>
 
 <br>
 
 <details>
-    <summary><b>  ANOMALI DETECTION with SCORE FUNCTION</b></summary>
-The model in this case is an isolation forest model
+    <summary><b> ANOMALY DETECTION with SCORE FUNCTION </b></summary>
+
+In this case the model is an Isolation Forest. Its `decision_function` is mapped to `[0, 1]` (0 = normal, 1 = anomaly).
 
 ```python
+from sklearn.ensemble import IsolationForest
+
+ifo = IsolationForest(random_state=0).fit(X)
 
 def score_function(model, data):
-    try: # for global
-        df = model.decision_function(data)
-    except: # for local
-        df = model.decision_function(data.reshape(1,-1))
-    
-    return (-1*df+1)/2
+    # reshape so that it works for both many rows (global) and a single row (local)
+    return (-model.decision_function(data.reshape(-1, len(features))) + 1) / 2
 
-acme_ifo = ACME(ifo, 'AD_score', K=50, task='ad', score_function=score_function, features=features)
-acme_ifo = acme_ifo.explain(dataset, robust = True)
+dataset = X.copy()
+dataset['AD_score'] = score_function(ifo, X.values)
 
+acme_ifo = ACME(ifo, 'AD_score', features=features, K=50, task='ad', score_function=score_function)
+acme_ifo = acme_ifo.explain(dataset, robust=True)
+
+# explain the most anomalous observation
+idx = dataset['AD_score'].idxmax()
+acme_ifo.explain_local(dataset.loc[idx, features])
+
+acme_ifo.feature_importance(local=True)       # ratio, delta, change, distance_to_change, importance
+acme_ifo.summary_plot(local=True)
+acme_ifo.feature_exploration('bmi', local=True, plot=True)  # which values make it normal again?
+
+# aggregate the local importance over the top 20 anomalies
+acme_ifo.sum_local_scores(dataset.nlargest(20, 'AD_score'))
+acme_ifo.bar_plot()
+acme_ifo.reset_local_sum_importance()
 ```
 
 </details>
+
+More examples, including comparisons with SHAP and industrial anomaly detection use cases, are in the [notebook](notebook) folder.
