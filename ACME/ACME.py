@@ -78,8 +78,12 @@ class ACME():
         if not self._cat_features == []:
            self._cat_df = dataframe[ self._cat_features ].copy()
 
-        # we save the features used by the model in the original order (necessary to correctly compute the predictiom)
-        self._features = clean_list( dataframe.columns.to_list(), self._numeric_features + self._cat_features)
+        # the model input order is the user's `features` list; fall back to the dataframe order only when it was not given
+        if not self._features:
+            self._features = clean_list( dataframe.columns.to_list(), self._numeric_features + self._cat_features)
+        missing = set(self._features) - set(dataframe.columns)
+        if missing:
+            raise ValueError('features not found in dataframe: ' + str(sorted(missing)))
 
         # if the label class is given, find the corrispective position in the model class map
         # else auto set as label class the first class
