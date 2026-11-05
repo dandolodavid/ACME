@@ -95,7 +95,7 @@ def ACME_summary_plot(plot_df, meta):
                                 dash = 'dash')
                     )]
     # if anomaly detection add a line that marks the thresholds for state changing
-    if meta['task'] in meta['task'] in ['ad','anomaly detection'] and meta['local']:
+    if meta['task'] in ['ad','anomaly detection'] and meta['local']:
         shapes = shapes + [dict( 
                                     type='line', 
                                     x0 = 0.5, y0 = y_bottom, 
