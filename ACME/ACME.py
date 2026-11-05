@@ -7,6 +7,13 @@ from ACME.ACME_anomaly_detection import build_anomaly_detection_feature_explorat
 import plotly.express as px
 import plotly.graph_objects as go
 
+def _class_index(class_map, label_class):
+    '''Position of label_class in model.classes_, compared as strings so that 1 and '1' match.'''
+    match = np.where(class_map.astype(str) == str(label_class))[0]
+    if len(match) > 0:
+        return match[0]
+    raise ValueError('label_class ' + repr(label_class) + ' not found in model.classes_ ' + str(class_map.tolist()))
+
 class ACME():
     
     def __init__(self, model, target, features=[], cat_features=[], K=50, task='regression', score_function=None):
@@ -92,10 +99,7 @@ class ACME():
         if self._task  in ['c','class','classification']:
             class_map = np.array(self._model.classes_)
             if label_class is not None:
-                try:
-                    class_to_analyze = np.where(class_map == label_class)[0][0]
-                except:
-                    class_to_analyze = np.where(class_map == str(label_class))[0][0]
+                class_to_analyze = _class_index(class_map, label_class)
                 self._class_to_analyze = class_to_analyze
             if label_class is None:
                 label_class = list(class_map)
@@ -188,10 +192,7 @@ class ACME():
         if self._task  in ['c','class','classification']:
             class_map = np.array(self._model.classes_)
             if label_class is not None:
-                try:
-                    class_to_analyze = np.where(class_map == label_class)[0][0]
-                except:
-                    class_to_analyze = np.where(class_map == str(label_class))[0][0]
+                class_to_analyze = _class_index(class_map, label_class)
             else:
                 class_to_analyze = 0
                 label_class = class_map[class_to_analyze]

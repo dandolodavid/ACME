@@ -39,18 +39,13 @@ def compute_predictions(model, Z, features, task, score_function, class_to_analy
     elif task in ['r','reg','regression'] or task in ['ad','anomaly detection']:
         # prediciton
         predictions = model.predict(Z.drop(columns='quantile')[features].values)
-        try:
-            if predictions.shape[1] == 2:
-                predictions = predictions[:,0]
-        except:
-            pass
+        if np.ndim(predictions) == 2 and predictions.shape[1] == 2:
+            predictions = predictions[:,0]
         
     elif task in ['c','class','classification']:
         # prediciton
-        try:
-            predictions = model.predict_proba(Z.drop(columns='quantile')[features].values)[:,class_to_analyze]
-        except:
-            predictions = model.predict_proba(Z.drop(columns='quantile')[features].values)[class_to_analyze]
+        # asarray also covers models whose predict_proba returns a DataFrame
+        predictions = np.asarray(model.predict_proba(Z.drop(columns='quantile')[features].values))[:,class_to_analyze]
 
     return predictions
 
