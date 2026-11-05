@@ -183,6 +183,8 @@ class ACME():
         if len(self._global_explain.keys())==0:
             raise InterruptedError("You must first fit the acme explaination model with the 'explain' command on the same data used to train the model")
 
+        # local class state is kept in self._local_explain, so the global explanation is not altered
+        class_to_analyze = self._class_to_analyze
         if self._task  in ['c','class','classification']:
             class_map = np.array(self._model.classes_)
             if label_class is not None:
@@ -195,18 +197,14 @@ class ACME():
                 label_class = class_map[class_to_analyze]
                 print('WARNING: in local interpretation, the label_class must be specified and not None. To default it\'s setted to class:' + str(class_map[0]))
 
-            # save the class to analize and the label
-            self._class_to_analyze = class_to_analyze
-            self._label_class = label_class
-
-        local_table, local_importance_table, local_baseline_pred, local_baseline = predictACME(model=self._model, 
+        local_table, local_importance_table, local_baseline_pred, local_baseline = predictACME(model=self._model,
                     series=series,
                     features=self._features,
                     meta_table=self._global_explain['meta'],
                     percentile_functions=self._perc_functions,
-                    task=self._task, 
-                    score_function=self._score_function, 
-                    class_to_analyze=self._class_to_analyze)
+                    task=self._task,
+                    score_function=self._score_function,
+                    class_to_analyze=class_to_analyze)
         
         if self._task in ['c','class','classification']:
             local_table['class'] = local_table['class'].map({class_to_analyze : class_map[class_to_analyze]})
@@ -215,6 +213,7 @@ class ACME():
                                 'feature_importance':local_importance_table.sort_values('importance', ascending = False).copy(),
                                 'baseline_pred':local_baseline_pred,
                                 'baseline':local_baseline,
+                                'label_class':label_class,
                                 'local_name':series.name}  # save the index of the local observation, it's the name of the series (corrisponding to the dataframe index)
 
         return self
@@ -356,7 +355,7 @@ class ACME():
             meta['local'] = False
 
             if self._task  in ['c','class','classification']:
-                meta['label_class'] = self._label_class
+                meta['label_class'] = self._local_explain['label_class'] if local else self._label_class
                 meta['local'] = False
                 
             if local:
