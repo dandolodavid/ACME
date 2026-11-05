@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 from scipy import stats
 from functools import partial
-from ACME.utils import most_frequent
 
 
 def _percentileofscore(dataframe, feature):
@@ -148,7 +147,8 @@ def create_level_variable_matrix(dataframe, feature):
     '''
     
     x_j_k = np.unique(dataframe[feature].to_list())
-    x_most_freq = dataframe.apply(lambda x: most_frequent(x),axis=0)
+    # same tie-break as the categorical baseline in computeACME
+    x_most_freq = dataframe.mode().iloc[0]
     
     Z = pd.DataFrame( x_most_freq ).T
     Z = pd.concat([Z]*len(x_j_k), ignore_index=True)
@@ -250,7 +250,8 @@ def computeACME(model, features, numeric_df, cat_df, task, K, robust = False, cl
             numeric_baseline = pd.DataFrame()
         # if there are categoric features take the mode, else set to an empty df
         if len(cat_features) > 0:
-            cat_baseline = cat_df.mode()
+            # mode() returns one row per tied mode: keep only the first
+            cat_baseline = cat_df.mode().iloc[[0]]
         else : 
             cat_baseline = pd.DataFrame()
         
