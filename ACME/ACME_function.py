@@ -334,7 +334,9 @@ def predictACME(model, series, features, percentile_functions, meta_table, task,
     baseline_pred = compute_baseline_predictions(model=model, baseline=baseline, task=task, score_function=score_function, class_to_analyze=class_to_analyze)
     
     # take the necessary info from the table
-    predict_meta_table = meta_table[['original','quantile','type_feature','importance']].copy()
+    # the quantile grid depends only on the data: a multiclass meta table repeats it once per class
+    grid = meta_table[['original','quantile','type_feature']]
+    predict_meta_table = grid[~grid.reset_index().duplicated().values].copy()
     
     # prepare containers
     Z_list = []
