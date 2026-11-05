@@ -23,12 +23,6 @@ def compute_baseline_predictions(model, baseline, task, score_function, class_to
         baseline_pred = model.predict(baseline.values)[0]
         
     elif task in ['c','class','classification']:
-        # mean prediction
-        try:
-            if len(baseline_pred) == 2:
-                baseline_pred = baseline_pred[0]
-        except:
-            pass   
         baseline_pred =  model.predict_proba(baseline.values)[0][class_to_analyze]
 
     return baseline_pred
