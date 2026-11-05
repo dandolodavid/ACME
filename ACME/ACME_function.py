@@ -166,6 +166,8 @@ def nearest_quantile(dataframe, local_value, cat_features):
     original_list = dataframe['original'].unique()
     if cat_features:
         quantile = dataframe.loc[ dataframe['original'] == local_value,  'quantile']
+        if len(quantile) == 0:
+            raise ValueError('categorical value ' + str(local_value) + ' was not seen in the data passed to explain()')
     else:
         quantile = dataframe.loc[ dataframe['original'] == original_list[np.argmin(np.abs(original_list - local_value))],  'quantile']
     
