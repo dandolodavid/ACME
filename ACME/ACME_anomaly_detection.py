@@ -51,8 +51,12 @@ def computeAnomalyDetectionImportance(local_table, weights={}):
 
     importance = {}
 
-    if len(weights.keys())==4:
-        if not abs(sum(list(weights.values()))-1) < TOL: 
+    expected_keys = {'ratio','distance','change','delta'}
+    if weights and set(weights.keys()) != expected_keys:
+        raise ValueError('weights must contain exactly the keys ' + str(sorted(expected_keys)) + ', got ' + str(sorted(weights.keys())))
+
+    if weights:
+        if not abs(sum(list(weights.values()))-1) < TOL:
             raise AttributeError('weights value must sum to 1')
     else:
         print('Using default weights for anomaly detection feature importance')
