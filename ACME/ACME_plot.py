@@ -72,7 +72,7 @@ def ACME_summary_plot(plot_df, meta):
 
     #set the color for the local score line
     if meta['local'] and (meta['task'] in ['ad','anomaly detection']):
-        color_local = 'red' if meta['x'] > 0 else 'blue' 
+        color_local = 'red' if meta['x'] >= 0.5 else 'blue'
     else:
         color_local = 'black'
     
